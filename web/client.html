@@ -19,6 +19,11 @@ dt{color:var(--mute)} dd{margin:0;color:var(--fg1);font-variant-numeric:tabular-
 ul.alerts{list-style:none;margin:0;padding:0}
 ul.alerts li{padding:9px 0;border-bottom:1px solid var(--line)}
 ul.alerts li:last-child{border-bottom:0}
+.ren{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-bottom:12px;background:var(--bg1)}
+.ren .old{color:var(--mute);font-size:12.5px;word-break:break-all;margin:2px 0 8px}
+.ren .old b{color:var(--orange);font-weight:500}
+.ren input{flex:1 1 240px}
+.ren .msg{margin-top:6px;font-size:13px}
 @media (max-width:600px){ .door .card-body{grid-template-columns:1fr} .dial{width:72px;height:72px} }
 </style>
 </head>
@@ -101,6 +106,10 @@ ul.alerts li:last-child{border-bottom:0}
           <div id="massBox" class="hidden" style="margin-bottom:12px">
             <p class="warn-text" id="massText"></p>
             <button id="massBtn" class="danger">Conferma l'eliminazione</button>
+          </div>
+          <div id="renameBox" class="hidden">
+            <p class="warn-text" style="margin:0 0 10px">Nomi troppo lunghi per essere cifrati: questi elementi non sono nella cassaforte. Accetta il nome proposto o modificalo.</p>
+            <div id="renames"></div>
           </div>
           <ul class="alerts" id="alerts"></ul>
         </div>
@@ -192,14 +201,37 @@ function render(){
   for(const c of (s.conflicts||[])) items.push(['', 'Conflitto: la tua versione è salvata come “' + c + '”']);
   for(const p of (s.problems||[])) items.push(['warn-text', p]);
   $('alerts').innerHTML = '';
-  if(!items.length){ const li=document.createElement('li'); li.className='empty'; li.textContent='Nessun avviso.'; $('alerts').append(li); }
+  if(!items.length && !(s.renames||[]).length){ const li=document.createElement('li'); li.className='empty'; li.textContent='Nessun avviso.'; $('alerts').append(li); }
   for(const [cls, t] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=t; $('alerts').append(li); }
   $('massBox').classList.toggle('hidden', !s.massDelete);
+  renderRenames(s.renames || [], s.open);
   $('massText').textContent = s.massDelete + ' file sono spariti tutti insieme dalla cartella aperta. Se li hai cancellati tu, conferma; altrimenti ripristinali.';
 
   if(document.activeElement !== $('workDir')) $('workDir').value = s.workDir;
   $('hubInfo').textContent = s.paired ? s.hubUrl : 'nessuno';
   $('log').textContent = (s.log||[]).join('\n');
+}
+let renKey = null;
+function renderRenames(list, open){
+  const key = JSON.stringify([open, list]);
+  if(key === renKey) return; // invariato: non toccare i campi che l'utente sta modificando
+  renKey = key;
+  $('renameBox').classList.toggle('hidden', !list.length);
+  const box = $('renames'); box.innerHTML = '';
+  for(const r of list){
+    const d = document.createElement('div'); d.className = 'ren';
+    d.innerHTML = '<div class="old"><b></b> <span></span></div><div class="row"><input aria-label="Nuovo nome"><button class="primary small">Rinomina</button></div><div class="msg"></div>';
+    d.querySelector('b').textContent = r.dir ? 'Cartella:' : 'File:';
+    d.querySelector('span').textContent = r.path;
+    const inp = d.querySelector('input'), btn = d.querySelector('button'), msg = d.querySelector('.msg');
+    inp.value = r.suggest;
+    btn.disabled = !open; if(!open) msg.textContent = 'Apri la cassaforte per rinominare.';
+    const go = async () => { btn.disabled = true; msg.textContent = '';
+      try{ await api('/api/rename', {Path:r.path, Name:inp.value}); renKey = null; refresh(); }
+      catch(e){ msg.textContent = e.message; btn.disabled = false; } };
+    btn.onclick = go; inp.addEventListener('keydown', e => { if(e.key === 'Enter') go(); });
+    box.append(d);
+  }
 }
 async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio encluca non risponde.'; } }
 

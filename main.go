@@ -172,7 +172,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 		}
 	}
 	type body struct {
-		Password, Code, HubURL, Name, Dir string
+		Password, Code, HubURL, Name, Dir, Path string
 	}
 	parse := func(r *http.Request) body {
 		var b body
@@ -188,6 +188,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	mux.HandleFunc("/api/open", post(func(r *http.Request) (any, error) { return nil, c.Open(parse(r).Password) }))
 	mux.HandleFunc("/api/close", post(func(r *http.Request) (any, error) { return nil, c.Close() }))
 	mux.HandleFunc("/api/openfolder", post(func(r *http.Request) (any, error) { return nil, c.OpenFolder() }))
+	mux.HandleFunc("/api/rename", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.Rename(b.Path, b.Name) }))
 	mux.HandleFunc("/api/confirm-deletes", post(func(r *http.Request) (any, error) { c.ConfirmDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) {

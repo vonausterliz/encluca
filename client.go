@@ -105,6 +105,7 @@ type Client struct {
 	lastSync  time.Time
 	conflicts []string
 	problems  map[string]string
+	renames   map[string]string // elemento troppo lungo (percorso relativo) -> nome suggerito
 	encCache  map[string]string
 	massDel   int // eliminazioni bloccate in attesa di conferma
 	allowDel  bool
@@ -122,7 +123,7 @@ func (c *Client) mirrorPath(enc string) string {
 }
 
 func newClient(dir string) (*Client, error) {
-	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}}
+	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}, renames: map[string]string{}}
 	for _, d := range []string{dir, c.mirrorDir(), c.tmpDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
@@ -422,6 +423,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 	// la scansione percorre tutta la cartella: l'elenco dei problemi si ricostruisce da zero,
 	// così sparisce la segnalazione di un file rinominato o spostato
 	c.problems = map[string]string{}
+	c.renames = map[string]string{}
 	var firstErr error
 	walkErr := filepath.WalkDir(work, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -450,6 +452,9 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		enc, err := c.encPathLocked(rel)
 		if err != nil {
 			c.problems[rel] = "nome troppo lungo per essere cifrato: accorcialo"
+			if errors.Is(err, rcrypt.ErrNameLength) {
+				c.noteLongNameLocked(rel)
+			}
 			return nil
 		}
 		delete(c.problems, rel)
@@ -1271,16 +1276,31 @@ func (c *Client) Status() map[string]any {
 	}
 	probs := []string{}
 	for k, v := range c.problems {
+		if c.longNameCoveredLocked(k) {
+			continue // mostrato tra i nomi da rinominare, con il suggerimento
+		}
 		probs = append(probs, k+": "+v)
 	}
 	sort.Strings(probs)
+	type renameItem struct {
+		Path    string `json:"path"`
+		Name    string `json:"name"`
+		Suggest string `json:"suggest"`
+		Dir     bool   `json:"dir"`
+	}
+	renames := []renameItem{}
+	for comp, sug := range c.renames {
+		info, err := os.Lstat(filepath.Join(c.cfg.WorkDir, filepath.FromSlash(comp)))
+		renames = append(renames, renameItem{comp, path.Base(comp), sug, err == nil && info.IsDir()})
+	}
+	sort.Slice(renames, func(i, j int) bool { return renames[i].Path < renames[j].Path })
 	_, metaErr := os.Stat(c.metaCache())
 	return map[string]any{
 		"version": Version, "paired": c.cfg.Token != "", "revoked": c.revoked, "hubUrl": c.cfg.HubURL,
 		"deviceName": c.cfg.DeviceName, "online": c.online, "lastError": c.lastErr, "lastSync": c.lastSync,
 		"open": c.cip != nil, "staleOpen": c.cip == nil && c.st.Open, "workDir": c.cfg.WorkDir,
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
-		"problems": probs, "massDelete": c.massDel, "busy": c.busy, "vaultKnown": metaErr == nil,
+		"problems": probs, "renames": renames, "massDelete": c.massDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(),
 	}
 }
