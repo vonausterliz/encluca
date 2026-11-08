@@ -13,7 +13,8 @@ build() { # os arch packaging-dir
   echo "→ $name"
   CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o "$out/encluca$ext" .
   cp packaging/$pkg/* "$out/"
-  cp LEGGIMI.md "$out/"
+  cp LEGGIMI.md README.md "$out/"
+  [ "$os" = linux ] && cp docs/INSTALLA-TRUENAS.md "$out/"
   if [ "$os" = windows ]; then
     (cd dist && python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1], 'zip', '.', sys.argv[1])" "$name")
   else
