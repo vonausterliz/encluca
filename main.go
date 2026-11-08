@@ -2,6 +2,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"errors"
@@ -17,17 +18,20 @@ import (
 	"time"
 )
 
-var Version = "0.1.1"
+var Version = "0.1.2"
 
-//go:embed web/*.html
+//go:embed web/*.html web/*.css
 var webFS embed.FS
 
+// serveUI invia la pagina con il tema comune (web/theme.css) incluso al posto del segnaposto.
 func serveUI(w http.ResponseWriter, name string) {
 	b, err := webFS.ReadFile(name)
-	if err != nil {
+	css, err2 := webFS.ReadFile("web/theme.css")
+	if err != nil || err2 != nil {
 		http.Error(w, "interfaccia non trovata", 500)
 		return
 	}
+	b = bytes.Replace(b, []byte("/*THEME*/"), css, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b)

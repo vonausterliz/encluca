@@ -63,7 +63,20 @@ Disinstallazione: `./install.sh uninstall` (Linux e macOS) oppure `install.ps1 -
 
 ### 3. Backup su Google Drive
 
-Dall'interfaccia del NAS, sezione **Backup su Google Drive**, segui i 4 passaggi indicati: crea un client OAuth di tipo "TV e dispositivi con input limitato", incolla le credenziali e premi **Collega Google Drive**.
+L'API di Google Drive è gratuita e non richiede la fatturazione. L'unico limite è lo spazio del tuo Drive (15 GB con l'account gratuito).
+
+1. Apri https://console.cloud.google.com e accedi con l'account Google che riceverà il backup.
+2. In alto, nel selettore dei progetti, scegli **Nuovo progetto**, chiamalo `encluca` e crealo. Assicurati che sia selezionato.
+3. *API e servizi → Libreria*: cerca **Google Drive API** e premi **Abilita**.
+4. *API e servizi → Schermata consenso OAuth* (o *Google Auth Platform*):
+   - nome dell'app `encluca`, la tua email come email di assistenza e di contatto;
+   - tipo di utenti: **Esterno**;
+   - poi in **Pubblico** premi **Pubblica app** e conferma lo stato **In produzione**.
+     ⚠️ Se resta in "Test", Google revoca l'accesso dopo 7 giorni e il backup si ferma. Per lo scope `drive.file` non serve la verifica di Google.
+5. *Client* (o *Credenziali → Crea credenziali → ID client OAuth*): tipo **TV e dispositivi con input limitato**, nome `encluca-nas`. Copia **Client ID** e **Client Secret**.
+6. Nell'interfaccia del NAS, sezione **Backup su Google Drive**, incolla Client ID e Client Secret e premi **Collega Google Drive**.
+7. Compaiono un indirizzo (`https://www.google.com/device`) e un codice. Aprilo da qualunque dispositivo, inserisci il codice, scegli il tuo account e consenti l'accesso. Google può mostrare "app non verificata": scegli *Avanzate → Vai a encluca*. È la tua app.
+8. Dopo qualche secondo lo stato diventa **Attivo** e parte il primo backup. Su Drive compare la cartella `Encluca`.
 
 - Dopo ogni modifica, il backup parte entro circa un minuto. In più c'è un controllo completo periodico.
 - I file modificati o cancellati non vengono persi: la vecchia copia viene spostata in `_versioni/<data-ora>/` e conservata per il numero di giorni scelto (30 di default).

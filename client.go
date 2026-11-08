@@ -87,14 +87,17 @@ type clientState struct {
 }
 
 type Client struct {
-	dir  string
-	log  *ringLog
-	mu   sync.Mutex
-	cfg  clientConfig
-	st   clientState
-	cip  *rcrypt.Cipher
-	hc   *http.Client
-	wake chan struct{}
+	dir string
+	log *ringLog
+	mu  sync.Mutex
+	// syncMu serializza syncEntry: pull e risoluzione dei conflitti differiti non devono
+	// allineare lo stesso file in parallelo (si otterrebbero copie di conflitto doppie)
+	syncMu sync.Mutex
+	cfg    clientConfig
+	st     clientState
+	cip    *rcrypt.Cipher
+	hc     *http.Client
+	wake   chan struct{}
 
 	online    bool
 	revoked   bool
@@ -119,7 +122,7 @@ func (c *Client) mirrorPath(enc string) string {
 }
 
 func newClient(dir string) (*Client, error) {
-	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}}
+	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}}
 	for _, d := range []string{dir, c.mirrorDir(), c.tmpDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
@@ -579,12 +582,25 @@ func (c *Client) resolveConflictLocked(enc string) error {
 	if err != nil {
 		return err
 	}
-	newRel := conflictName(rel, c.cfg.DeviceName)
-	newEnc, err := c.encPathLocked(newRel)
-	if err != nil {
-		newRel = conflictName(path.Join(path.Dir(rel), "file"), c.cfg.DeviceName)
-		if newEnc, err = c.encPathLocked(newRel); err != nil {
-			return err
+	var newRel, newEnc string
+	for i := 1; ; i++ {
+		base := rel
+		if i > 1 {
+			base = fmt.Sprintf("%s (%d)", rel, i) // conflictName lascia l'estensione in fondo
+			if ext := path.Ext(rel); ext != "" {
+				base = fmt.Sprintf("%s (%d)%s", strings.TrimSuffix(rel, ext), i, ext)
+			}
+		}
+		newRel = conflictName(base, c.cfg.DeviceName)
+		newEnc, err = c.encPathLocked(newRel)
+		if err != nil {
+			newRel = conflictName(path.Join(path.Dir(rel), fmt.Sprintf("file %d", i)), c.cfg.DeviceName)
+			if newEnc, err = c.encPathLocked(newRel); err != nil {
+				return err
+			}
+		}
+		if _, used := c.st.Files[newEnc]; !used {
+			break
 		}
 	}
 	// il contenuto cifrato non dipende dal nome: basta spostare il file
@@ -610,6 +626,8 @@ func (c *Client) resolveConflictLocked(enc string) error {
 
 // syncEntry allinea un file allo stato remoto e.
 func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
+	c.syncMu.Lock()
+	defer c.syncMu.Unlock()
 	c.mu.Lock()
 	if c.cip != nil && c.st.Open {
 		// prima di decidere, cattura eventuali modifiche locali non ancora viste
@@ -621,6 +639,13 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	}
 	st := c.st.Files[e.Path]
 	if st != nil && st.Rev >= e.Rev {
+		c.mu.Unlock()
+		return nil
+	}
+	if st != nil && st.Pending == "put" && !e.Del && e.SHA == st.SHA {
+		// è il nostro stesso invio, visto dal pull prima che il push ne elaborasse la risposta
+		st.Rev, st.Pending, st.Conflict = e.Rev, "", 0
+		c.saveState()
 		c.mu.Unlock()
 		return nil
 	}
@@ -814,11 +839,14 @@ func (c *Client) pushOnce(ctx context.Context) {
 				return
 			}
 			c.mu.Lock()
-			if st := c.st.Files[enc]; st != nil {
-				st.Conflict = 0
-				if st.Rev >= e.Rev {
-					st.Rev = e.Rev - 1 // forza la rivalutazione
-				}
+			st := c.st.Files[enc]
+			if st == nil || st.Conflict == 0 {
+				c.mu.Unlock() // già risolto nel frattempo (es. dal pull)
+				continue
+			}
+			st.Conflict = 0
+			if st.Rev >= e.Rev {
+				st.Rev = e.Rev - 1 // forza la rivalutazione
 			}
 			c.mu.Unlock()
 			if err := c.syncEntry(ctx, &e); err != nil {
@@ -884,6 +912,13 @@ func (c *Client) pushOnce(ctx context.Context) {
 			st.Rev = max(st.Rev, e.Rev)
 			if st.Pending == j.st.Pending && st.SHA == j.st.SHA {
 				st.Pending = ""
+				// l'hub ha accettato la nostra revisione: un eventuale "conflitto" segnato nel
+				// frattempo dal pull era il nostro stesso invio, oppure una revisione successiva
+				// di un altro dispositivo, che va semplicemente riscaricata
+				if st.Conflict > e.Rev {
+					c.st.Seq = 0
+				}
+				st.Conflict = 0
 			}
 		}
 		c.lastSync = time.Now()

@@ -74,19 +74,24 @@ P=/mnt/NOMEPOOL/encluca
 ```
 sudo mkdir "$P/bin" "$P/data"
 ```
+Imposta la versione da installare (l'ultima è indicata nella [pagina delle release](https://github.com/vonausterliz/encluca/releases/latest)):
+```
+V=0.1.2
+```
 ```
 cd /tmp
-curl -fLO https://github.com/vonausterliz/encluca/releases/download/v0.1.1/encluca-0.1.1-linux-amd64.tar.gz
+curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/encluca-$V-linux-amd64.tar.gz
+curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/SHA256SUMS.txt
 ```
 Verifica che il file sia integro:
 ```
-echo "6aa10585e933f5a91d9fb114038b9b92c80881d7eda26f11f0b1d7f6ebbe5a56  encluca-0.1.1-linux-amd64.tar.gz" | sha256sum -c
+sha256sum -c --ignore-missing SHA256SUMS.txt
 ```
-La risposta **deve** essere `encluca-0.1.1-linux-amd64.tar.gz: OK`. Se è diversa, fermati.
+La risposta **deve** essere `encluca-…-linux-amd64.tar.gz: OK`. Se è diversa, fermati.
 
 ```
-tar xzf encluca-0.1.1-linux-amd64.tar.gz
-sudo cp encluca-0.1.1-linux-amd64/encluca "$P/bin/"
+tar xzf encluca-$V-linux-amd64.tar.gz
+sudo cp encluca-$V-linux-amd64/encluca "$P/bin/"
 sudo chmod 755 "$P/bin/encluca"
 ```
 Assegna all'utente `apps` **solo** le due cartelle nuove. Il comando è volutamente senza `-R`:
@@ -101,7 +106,7 @@ Devi vedere `bin` e `data` con proprietario `568 568`, e il file `encluca` con p
 
 Pulisci i file temporanei:
 ```
-rm -rf /tmp/encluca-0.1.1-linux-amd64*
+rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
 ```
 
 ---
@@ -172,8 +177,22 @@ L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGG
 
 ## Aggiornare a una nuova versione
 
-1. Ripeti il passo 2 con il nuovo pacchetto, cambiando numero di versione e impronta. Sovrascrive solo `bin/encluca`, mentre `data` resta intatto.
-2. In *Apps → encluca* premi **Restart**.
+Nella Shell di TrueNAS, sostituendo `NOMEPOOL` e indicando la nuova versione:
+```
+P=/mnt/NOMEPOOL/encluca
+V=0.1.2
+cd /tmp
+curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/encluca-$V-linux-amd64.tar.gz
+curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/SHA256SUMS.txt
+sha256sum -c --ignore-missing SHA256SUMS.txt
+```
+Solo se la risposta è `OK`:
+```
+tar xzf encluca-$V-linux-amd64.tar.gz
+sudo cp encluca-$V-linux-amd64/encluca "$P/bin/encluca"
+rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
+```
+Poi in *Apps → encluca* premi **Restart**. Viene sostituito solo `bin/encluca`: `data`, cioè i file cifrati, i dispositivi e la password, resta intatto.
 
 ## Disinstallare
 

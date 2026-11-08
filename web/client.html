@@ -3,137 +3,128 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Encluca</title>
+<title>encluca</title>
 <style>
-:root{
-  --steel:#2F3A45; --steel-2:#3D4B58; --paper:#EEF1F3; --card:#FFFFFF; --ink:#1C2228; --mute:#5E6B76;
-  --line:#D5DCE1; --amber:#E0A100; --amber-ink:#3A2A00; --teal:#2E7D6B; --red:#B3261E;
-  --radius-lg:22px; --radius-sm:8px;
-}
-@media (prefers-color-scheme: dark){
-  :root{ --paper:#151A1F; --card:#1E252C; --ink:#E6EBEF; --mute:#9AA7B2; --line:#2E3842; --steel:#26313B; --steel-2:#33414D; }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif}
-main{max-width:960px;margin:0 auto;padding:24px 16px 64px}
-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
-header h1{font-size:20px;margin:0;letter-spacing:.01em}
-header span{color:var(--mute);font-size:14px}
-
-.door{background:var(--steel);color:#F2F5F7;border-radius:var(--radius-lg);padding:28px;display:grid;grid-template-columns:120px 1fr;gap:28px;align-items:center;transition:background .4s}
-.door.open{background:var(--amber);color:var(--amber-ink)}
-.dial{width:120px;height:120px;border-radius:50%;border:6px solid currentColor;display:grid;place-items:center;opacity:.95}
-.dial svg{width:56px;height:56px}
-.door h2{font-size:30px;line-height:1.15;margin:0 0 6px}
-.door p{margin:0 0 16px;max-width:60ch}
-.door code{background:rgba(0,0,0,.15);padding:2px 6px;border-radius:6px;word-break:break-all}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-input{font:inherit;padding:10px 12px;border-radius:var(--radius-sm);border:1px solid var(--line);background:var(--card);color:var(--ink);min-width:0}
-.door input{border-color:transparent;flex:1 1 220px;max-width:340px}
-button{font:inherit;font-weight:600;padding:10px 18px;border-radius:var(--radius-sm);border:0;cursor:pointer;background:var(--ink);color:var(--paper)}
-button.ghost{background:transparent;color:inherit;border:1.5px solid currentColor}
-.door button{background:#F2F5F7;color:var(--steel)}
-.door.open button{background:var(--amber-ink);color:var(--amber)}
-.door.open button.ghost{background:transparent;color:var(--amber-ink)}
-button:disabled{opacity:.5;cursor:wait}
-button:focus-visible,input:focus-visible,summary:focus-visible{outline:3px solid #4A90E2;outline-offset:2px}
-.msg{min-height:1.5em;margin-top:10px;font-weight:600}
-
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
-section h3{margin:0 0 12px;font-size:17px}
-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;margin:0}
-dt{color:var(--mute)} dd{margin:0;font-variant-numeric:tabular-nums}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline}
-.ok{background:var(--teal)} .ko{background:var(--red)} .wait{background:var(--amber)}
+/*THEME*/
+.door .card-body{display:grid;grid-template-columns:96px 1fr;gap:24px;align-items:center}
+.dial{width:96px;height:96px;border-radius:50%;display:grid;place-items:center;background:var(--bg1);color:var(--green);box-shadow:inset 0 0 0 3px currentColor}
+.dial svg{width:44px;height:44px}
+.door.open{box-shadow:inset 4px 0 0 var(--yellow),0 1px 3px rgba(0,0,0,.5)}
+.door.open .dial{color:var(--yellow)}
+.door h3{margin:0 0 6px;font-size:20px;font-weight:500;color:var(--fg1)}
+.door p{margin:0 0 14px;max-width:70ch}
+.door input{flex:1 1 220px;max-width:320px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:10px 18px;margin:0}
+dt{color:var(--mute)} dd{margin:0;color:var(--fg1);font-variant-numeric:tabular-nums}
 ul.alerts{list-style:none;margin:0;padding:0}
-ul.alerts li{padding:8px 0;border-top:1px solid var(--line)}
-ul.alerts li:first-child{border-top:0}
-.empty{color:var(--mute)}
-details{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 20px}
-summary{cursor:pointer;font-weight:600}
-pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;max-height:320px;overflow:auto;margin:12px 0 0;color:var(--mute)}
-label{display:block;margin:12px 0 4px;color:var(--mute);font-size:14px}
-.full{width:100%}
-.warn{color:var(--red);font-weight:600}
-.hidden{display:none!important}
-@media (max-width:720px){ .door{grid-template-columns:1fr;padding:22px} .dial{width:84px;height:84px} .grid{grid-template-columns:1fr} .door h2{font-size:24px} }
-@media (prefers-reduced-motion: reduce){ .door{transition:none} }
+ul.alerts li{padding:9px 0;border-bottom:1px solid var(--line)}
+ul.alerts li:last-child{border-bottom:0}
+@media (max-width:600px){ .door .card-body{grid-template-columns:1fr} .dial{width:72px;height:72px} }
 </style>
 </head>
 <body>
-<main>
-  <header><h1>Encluca</h1><span id="device"></span></header>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><rect x="9" y="10.5" width="6" height="5" rx="1"/><path d="M10 10.5V9a2 2 0 0 1 4 0v1.5"/></symbol>
+</svg>
 
-  <!-- abbinamento -->
-  <section id="pairBox" class="hidden">
-    <h3>Collega questo computer al NAS</h3>
-    <p>Sul NAS apri l'interfaccia di Encluca, premi <b>Aggiungi dispositivo</b> e incolla qui il codice che compare.</p>
-    <label for="pairCode">Codice di abbinamento</label>
-    <input id="pairCode" class="full" placeholder="EL1-…" autocomplete="off">
-    <label for="pairName">Nome di questo computer</label>
-    <input id="pairName" class="full">
-    <label for="pairUrl">Indirizzo del NAS (facoltativo, se diverso da quello nel codice)</label>
-    <input id="pairUrl" class="full" placeholder="https://192.168.1.10:8443">
-    <div class="row" style="margin-top:14px"><button id="pairBtn">Collega</button></div>
-    <div class="msg" id="pairMsg"></div>
-  </section>
+<header class="topbar">
+  <a class="brand" href="#door"><svg><use href="#logo"/></svg>encluca</a>
+  <span class="spacer"></span>
+  <span class="meta" id="device"></span>
+</header>
+<div class="banner hidden" id="openBanner" role="status">Cassaforte aperta: i file sono in chiaro in <code id="bannerDir"></code></div>
 
-  <!-- porta della cassaforte -->
-  <div id="door" class="door hidden" aria-live="polite">
-    <div class="dial" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path id="shackle" d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
-    <div>
-      <h2 id="doorTitle">Cassaforte chiusa</h2>
-      <p id="doorText"></p>
-      <div class="row" id="closedCtl">
-        <input id="pw" type="password" placeholder="Password della cassaforte" autocomplete="current-password">
-        <input id="pw2" type="password" placeholder="Ripeti la password" class="hidden" autocomplete="new-password">
-        <button id="openBtn">Apri</button>
+<div class="layout">
+  <nav class="sidenav" aria-label="Sezioni">
+    <a href="#door"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 10V7a6 6 0 0 1 12 0v3h1a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V11a1 1 0 0 1 1-1zm2 0h8V7a4 4 0 0 0-8 0z"/></svg>Cassaforte</a>
+    <a href="#panels"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 4V1L8 5l4 4V6a6 6 0 0 1 5.2 9l1.5 1.5A8 8 0 0 0 12 4m0 14a6 6 0 0 1-5.2-9L5.3 7.5A8 8 0 0 0 12 20v3l4-4-4-4z"/></svg>Sincronizzazione</a>
+    <a href="#settings"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.7a7 7 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg>Impostazioni</a>
+    <a href="#registro"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h12v2H3z"/></svg>Registro</a>
+  </nav>
+
+  <main class="content">
+    <div class="page-title"><div><div class="crumbs">encluca › Questo computer</div><h1>Cassaforte</h1></div></div>
+
+    <!-- abbinamento -->
+    <div class="card hidden" id="pairBox">
+      <div class="card-header"><h2>Collega questo computer al NAS</h2><span class="chip wait">Non collegato</span></div>
+      <div class="card-body">
+        <p>Sul NAS apri l'interfaccia di encluca, premi <b>Aggiungi dispositivo</b> e incolla qui il codice che compare.</p>
+        <label for="pairCode">Codice di abbinamento</label>
+        <input id="pairCode" class="full" placeholder="EL1-…" autocomplete="off">
+        <label for="pairName">Nome di questo computer</label>
+        <input id="pairName" class="full">
+        <label for="pairUrl">Indirizzo del NAS (facoltativo, se diverso da quello nel codice)</label>
+        <input id="pairUrl" class="full" placeholder="https://192.168.1.10:8443">
+        <div class="row" style="margin-top:16px"><button id="pairBtn" class="primary">Collega</button></div>
+        <div class="msg" id="pairMsg"></div>
       </div>
-      <div class="row hidden" id="openCtl">
-        <button id="folderBtn">Mostra i file</button>
-        <button id="closeBtn" class="ghost">Chiudi la cassaforte</button>
-      </div>
-      <div class="msg" id="doorMsg"></div>
     </div>
-  </div>
 
-  <div class="grid hidden" id="panels">
-    <section>
-      <h3>Sincronizzazione</h3>
-      <dl>
-        <dt>NAS</dt><dd id="sNas"></dd>
-        <dt>File</dt><dd id="sFiles"></dd>
-        <dt>In coda</dt><dd id="sPending"></dd>
-        <dt>Ultimo allineamento</dt><dd id="sLast"></dd>
-      </dl>
-      <div class="row" style="margin-top:14px"><button class="ghost" id="syncBtn" style="color:var(--ink)">Sincronizza ora</button></div>
-    </section>
-    <section>
-      <h3>Avvisi</h3>
-      <div id="massBox" class="hidden">
-        <p class="warn" id="massText"></p>
-        <div class="row"><button id="massBtn">Conferma l'eliminazione</button></div>
+    <!-- stato della cassaforte -->
+    <div class="card door hidden" id="door" aria-live="polite">
+      <div class="card-header"><h2>Stato</h2><span class="chip ok" id="doorChip">Chiusa</span></div>
+      <div class="card-body">
+        <div class="dial" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path id="shackle" d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
+        <div>
+          <h3 id="doorTitle">Cassaforte chiusa</h3>
+          <p id="doorText"></p>
+          <div class="row" id="closedCtl">
+            <input id="pw" type="password" placeholder="Password della cassaforte" autocomplete="current-password">
+            <input id="pw2" type="password" placeholder="Ripeti la password" class="hidden" autocomplete="new-password">
+            <button id="openBtn" class="primary">Apri</button>
+          </div>
+          <div class="row hidden" id="openCtl">
+            <button id="folderBtn" class="primary">Mostra i file</button>
+            <button id="closeBtn" class="ghost">Chiudi la cassaforte</button>
+          </div>
+          <div class="msg" id="doorMsg"></div>
+        </div>
       </div>
-      <ul class="alerts" id="alerts"></ul>
-    </section>
-  </div>
+    </div>
 
-  <details id="settings" class="hidden">
-    <summary>Impostazioni</summary>
-    <label for="workDir">Cartella in cui aprire la cassaforte</label>
-    <div class="row"><input id="workDir" class="full" style="flex:1"><button id="workBtn">Salva</button></div>
-    <label>NAS collegato</label>
-    <div id="hubInfo"></div>
-    <div class="row" style="margin-top:10px"><button class="ghost" id="repairBtn" style="color:var(--ink)">Collega a un altro NAS</button></div>
-    <div class="msg" id="setMsg"></div>
-  </details>
+    <div class="grid2 hidden" id="panels" style="margin-bottom:16px">
+      <div class="card">
+        <div class="card-header"><h2>Sincronizzazione</h2><button class="ghost small" id="syncBtn">Sincronizza ora</button></div>
+        <div class="card-body">
+          <dl>
+            <dt>NAS</dt><dd id="sNas"></dd>
+            <dt>File</dt><dd id="sFiles"></dd>
+            <dt>In coda</dt><dd id="sPending"></dd>
+            <dt>Ultimo allineamento</dt><dd id="sLast"></dd>
+          </dl>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h2>Avvisi</h2></div>
+        <div class="card-body">
+          <div id="massBox" class="hidden" style="margin-bottom:12px">
+            <p class="warn-text" id="massText"></p>
+            <button id="massBtn" class="danger">Conferma l'eliminazione</button>
+          </div>
+          <ul class="alerts" id="alerts"></ul>
+        </div>
+      </div>
+    </div>
 
-  <details>
-    <summary>Registro attività</summary>
-    <pre id="log"></pre>
-  </details>
-</main>
+    <div class="card hidden" id="settings">
+      <div class="card-header"><h2>Impostazioni</h2></div>
+      <div class="card-body">
+        <label for="workDir" style="margin-top:0">Cartella in cui aprire la cassaforte</label>
+        <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
+        <label>NAS collegato</label>
+        <div id="hubInfo" style="color:var(--fg1)"></div>
+        <div class="row" style="margin-top:12px"><button class="ghost" id="repairBtn">Collega a un altro NAS</button></div>
+        <div class="msg" id="setMsg"></div>
+      </div>
+    </div>
+
+    <div class="card" id="registro">
+      <div class="card-header"><h2>Registro attività</h2></div>
+      <div class="card-body"><pre class="log" id="log"></pre></div>
+    </div>
+  </main>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 let S = null, forcePair = false;
@@ -146,6 +137,7 @@ async function api(path, body){
 function when(t){ if(!t || t.startsWith('0001')) return 'mai'; const d=new Date(t); const s=(Date.now()-d)/1000;
   if(s<60) return 'adesso'; if(s<3600) return Math.floor(s/60)+' min fa'; return d.toLocaleString('it-IT'); }
 function busy(btn, on){ btn.disabled = on; }
+const chip = (cls, text) => '<span class="chip '+cls+'">'+text+'</span>';
 
 function render(){
   const s = S; if(!s) return;
@@ -156,42 +148,49 @@ function render(){
   for(const id of ['door','panels','settings']) $(id).classList.toggle('hidden', needPair && !s.vaultKnown);
   if(s.revoked) $('pairMsg').textContent = s.lastError;
 
-  const door = $('door');
-  door.classList.toggle('open', s.open || s.staleOpen);
+  const open = s.open || s.staleOpen;
+  $('door').classList.toggle('open', open);
+  $('openBanner').classList.toggle('hidden', !s.open);
+  $('bannerDir').textContent = s.workDir;
   $('shackle').setAttribute('d', s.open ? 'M8 11V7a4 4 0 0 1 7.5-2' : 'M8 11V7a4 4 0 0 1 8 0v4');
   const creating = s.paired && !s.vaultKnown && !s.open;
   $('pw2').classList.toggle('hidden', !creating);
   $('closedCtl').classList.toggle('hidden', s.open);
   $('openCtl').classList.toggle('hidden', !s.open);
+  const dc = $('doorChip');
   if(s.open){
+    dc.className='chip wait'; dc.textContent='Aperta';
     $('doorTitle').textContent = 'Cassaforte aperta';
     $('doorText').innerHTML = 'I file sono in chiaro in <code></code>. Ogni modifica viene cifrata e inviata al NAS. Chiudila quando hai finito.';
     $('doorText').querySelector('code').textContent = s.workDir;
   } else if(s.staleOpen){
+    dc.className='chip wait'; dc.textContent='Rimasta aperta';
     $('doorTitle').textContent = 'Cassaforte rimasta aperta';
     $('doorText').textContent = 'Il servizio è stato riavviato con la cassaforte aperta: i file in chiaro sono ancora sul disco. Inserisci la password per riprendere, poi chiudila.';
     $('openBtn').textContent = 'Riprendi';
   } else if(creating){
+    dc.className='chip info'; dc.textContent='Da creare';
     $('doorTitle').textContent = 'Crea la cassaforte';
     $('doorText').textContent = 'Scegli la password che userai su tutti i tuoi computer. Non è recuperabile: se la perdi, i dati restano illeggibili per sempre.';
     $('openBtn').textContent = 'Crea e apri';
   } else {
+    dc.className='chip ok'; dc.textContent='Chiusa';
     $('doorTitle').textContent = 'Cassaforte chiusa';
     $('doorText').textContent = 'Sul disco ci sono solo dati cifrati. La sincronizzazione con il NAS continua anche a cassaforte chiusa.';
     $('openBtn').textContent = 'Apri';
   }
   if(s.busy) $('doorMsg').textContent = s.busy === 'apertura' ? 'Decifratura in corso…' : 'Cifratura e chiusura in corso…';
 
-  $('sNas').innerHTML = s.paired ? (s.online ? '<span class="dot ok"></span>raggiungibile' : '<span class="dot ko"></span>non raggiungibile') : '<span class="dot wait"></span>non collegato';
+  $('sNas').innerHTML = s.paired ? (s.online ? chip('ok','Raggiungibile') : chip('ko','Non raggiungibile')) : chip('wait','Non collegato');
   $('sFiles').textContent = s.files;
   $('sPending').textContent = s.pending ? s.pending + (s.online ? ' in invio' : ' in attesa del NAS') : 'nulla';
   $('sLast').textContent = when(s.lastSync);
 
   const items = [];
-  if(s.lastError && !s.revoked) items.push(['warn', s.lastError]);
+  if(s.lastError && !s.revoked) items.push(['warn-text', s.lastError]);
   if(s.deferredConflicts) items.push(['', s.deferredConflicts + ' conflitti da risolvere: apri la cassaforte']);
-  for(const c of s.conflicts) items.push(['', 'Conflitto: la tua versione è salvata come “' + c + '”']);
-  for(const p of s.problems) items.push(['warn', p]);
+  for(const c of (s.conflicts||[])) items.push(['', 'Conflitto: la tua versione è salvata come “' + c + '”']);
+  for(const p of (s.problems||[])) items.push(['warn-text', p]);
   $('alerts').innerHTML = '';
   if(!items.length){ const li=document.createElement('li'); li.className='empty'; li.textContent='Nessun avviso.'; $('alerts').append(li); }
   for(const [cls, t] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=t; $('alerts').append(li); }
@@ -200,9 +199,16 @@ function render(){
 
   if(document.activeElement !== $('workDir')) $('workDir').value = s.workDir;
   $('hubInfo').textContent = s.paired ? s.hubUrl : 'nessuno';
-  $('log').textContent = s.log.join('\n');
+  $('log').textContent = (s.log||[]).join('\n');
 }
-async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio Encluca non risponde.'; } }
+async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio encluca non risponde.'; } }
+
+// voce attiva nel menu laterale in base alla sezione visibile
+const links = [...document.querySelectorAll('.sidenav a')];
+const markActive = id => links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+id));
+const io = new IntersectionObserver(es => { for(const e of es) if(e.isIntersecting) markActive(e.target.id); }, {rootMargin:'-60px 0px -70% 0px'});
+for(const id of ['door','panels','settings','registro']) io.observe($(id));
+markActive('door');
 
 $('pairBtn').onclick = async () => { busy($('pairBtn'),true); $('pairMsg').textContent='Collegamento…';
   try{ await api('/api/pair',{Code:$('pairCode').value, Name:$('pairName').value, HubURL:$('pairUrl').value}); $('pairMsg').textContent=''; $('pairCode').value=''; forcePair=false; }

@@ -3,131 +3,129 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Encluca NAS</title>
+<title>encluca · NAS</title>
 <style>
-:root{ --steel:#2F3A45; --paper:#EEF1F3; --card:#FFFFFF; --ink:#1C2228; --mute:#5E6B76; --line:#D5DCE1; --amber:#E0A100; --teal:#2E7D6B; --red:#B3261E; }
-@media (prefers-color-scheme: dark){ :root{ --paper:#151A1F; --card:#1E252C; --ink:#E6EBEF; --mute:#9AA7B2; --line:#2E3842; --steel:#26313B; } }
-*{box-sizing:border-box}
-body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,sans-serif}
-main{max-width:960px;margin:0 auto;padding:24px 16px 64px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;gap:12px}
-header h1{font-size:20px;margin:0}
-.band{background:var(--steel);color:#F2F5F7;border-radius:22px;padding:26px 28px;display:flex;gap:40px;flex-wrap:wrap}
-.band div b{display:block;font-size:30px;line-height:1.1;font-variant-numeric:tabular-nums}
-.band div span{opacity:.8;font-size:14px}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:16px}
-section h2{margin:0 0 10px;font-size:18px}
-section p{margin:0 0 12px;max-width:72ch}
-input{font:inherit;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);min-width:0}
-button{font:inherit;font-weight:600;padding:10px 18px;border-radius:8px;border:0;cursor:pointer;background:var(--ink);color:var(--paper)}
-button.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
-button.danger{background:transparent;color:var(--red);border:1.5px solid var(--red);padding:6px 12px}
-button:focus-visible,input:focus-visible{outline:3px solid #4A90E2;outline-offset:2px}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-table{width:100%;border-collapse:collapse}
-td,th{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
-th{color:var(--mute);font-weight:500;border-top:0}
-.code{display:block;word-break:break-all;background:var(--paper);padding:12px;border-radius:8px;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace;margin:10px 0}
-label{display:block;margin:10px 0 4px;color:var(--mute);font-size:14px}
-.full{width:100%}
-ol{margin:0 0 12px;padding-left:20px;max-width:72ch} ol li{margin:4px 0}
-.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
-.ok{background:var(--teal)} .ko{background:var(--red)} .wait{background:var(--amber)}
-.msg{min-height:1.4em;margin-top:8px;font-weight:600}
-.warn{border-color:var(--amber);border-width:2px}
-.big{font-size:28px;font-weight:700;letter-spacing:.08em}
-pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;max-height:320px;overflow:auto;color:var(--mute);margin:0}
-.hidden{display:none!important}
-.login{max-width:380px;margin:12vh auto}
+/*THEME*/
 </style>
 </head>
 <body>
-<main>
-  <div id="loginBox" class="login hidden">
-    <section>
-      <h2>Encluca sul NAS</h2>
-      <p>Accedi con la password amministratore. Al primo avvio la trovi nel registro dell'app o nel file <code>admin-password.txt</code> della cartella dati.</p>
-      <input id="loginPw" type="password" class="full" placeholder="Password amministratore" autocomplete="current-password">
-      <div class="row" style="margin-top:12px"><button id="loginBtn">Accedi</button></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><rect x="9" y="10.5" width="6" height="5" rx="1"/><path d="M10 10.5V9a2 2 0 0 1 4 0v1.5"/></symbol>
+</svg>
+
+<div id="loginBox" class="login hidden">
+  <div class="card">
+    <div class="brand"><svg><use href="#logo"/></svg>encluca</div>
+    <div class="card-body">
+      <p style="text-align:center;color:var(--mute)">Amministrazione dell'hub sul NAS</p>
+      <label for="loginPw">Password amministratore</label>
+      <input id="loginPw" type="password" class="full" autocomplete="current-password">
+      <p class="hint">Al primo avvio la trovi nei log dell'app o nel file <code>admin-password.txt</code> della cartella dati.</p>
+      <button id="loginBtn" class="primary full" style="margin-top:12px">Accedi</button>
       <div class="msg" id="loginMsg"></div>
-    </section>
-  </div>
-
-  <div id="app" class="hidden">
-    <header><h1>Encluca sul NAS</h1><button class="ghost" id="logoutBtn">Esci</button></header>
-
-    <div class="band">
-      <div><b id="nFiles">0</b><span>file cifrati</span></div>
-      <div><b id="nSize">0</b><span>occupati</span></div>
-      <div><b id="nDev">0</b><span>dispositivi</span></div>
-      <div><b id="nVault">–</b><span>cassaforte</span></div>
     </div>
-
-    <section id="pwWarn" class="warn hidden">
-      <h2>Cambia la password iniziale</h2>
-      <p>Stai usando la password generata al primo avvio. Sceglierne una tua elimina anche il file che la contiene.</p>
-      <div class="row">
-        <input id="oldPw" type="password" placeholder="Password attuale" autocomplete="current-password">
-        <input id="newPw" type="password" placeholder="Nuova password (min. 10 caratteri)" autocomplete="new-password">
-        <button id="pwBtn">Cambia password</button>
-      </div>
-      <div class="msg" id="pwMsg"></div>
-    </section>
-
-    <section>
-      <h2>Dispositivi</h2>
-      <p>Ogni computer che può sincronizzare la cassaforte. Il NAS non conosce la password della cassaforte: conserva solo dati cifrati.</p>
-      <table><thead><tr><th>Nome</th><th>Ultimo contatto</th><th></th></tr></thead><tbody id="devs"></tbody></table>
-      <label for="devName">Aggiungi un computer</label>
-      <div class="row">
-        <input id="devName" placeholder="Es. MacBook di Luca">
-        <input id="devUrl" placeholder="Indirizzo NAS visto dai PC (facoltativo)" style="flex:1">
-        <button id="addBtn">Aggiungi dispositivo</button>
-      </div>
-      <div id="codeBox" class="hidden">
-        <p style="margin-top:12px">Incolla questo codice nell'app Encluca del computer. Vale per un solo dispositivo e non viene mostrato di nuovo.</p>
-        <span class="code" id="codeText"></span>
-        <button class="ghost" id="copyBtn">Copia codice</button>
-      </div>
-    </section>
-
-    <section>
-      <h2>Backup su Google Drive</h2>
-      <p id="gdState"></p>
-      <div id="gdSetup">
-        <ol>
-          <li>Apri la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, crea un progetto e abilita la <b>Google Drive API</b>.</li>
-          <li>In <i>Schermata consenso OAuth</i> scegli “Esterno” e aggiungi il tuo account come utente di test.</li>
-          <li>Crea delle credenziali <b>ID client OAuth</b> di tipo <b>TV e dispositivi con input limitato</b>.</li>
-          <li>Incolla qui Client ID e Client Secret, salva, poi premi <b>Collega Google Drive</b>.</li>
-        </ol>
-        <label for="gdId">Client ID</label><input id="gdId" class="full">
-        <label for="gdSecret">Client Secret</label><input id="gdSecret" class="full" type="password" placeholder="lascia vuoto per non cambiarlo">
-      </div>
-      <div class="row" style="margin-top:10px">
-        <label style="margin:0">Cartella su Drive <input id="gdFolder" style="width:160px"></label>
-        <label style="margin:0">Conserva versioni (giorni) <input id="gdRet" type="number" min="1" style="width:90px"></label>
-        <label style="margin:0">Backup completo ogni (min) <input id="gdInt" type="number" min="5" style="width:90px"></label>
-      </div>
-      <div class="row" style="margin-top:14px">
-        <button id="gdSave" class="ghost">Salva impostazioni</button>
-        <button id="gdAuth">Collega Google Drive</button>
-        <button id="gdRun" class="ghost">Esegui backup ora</button>
-        <button id="gdOff" class="danger">Scollega</button>
-      </div>
-      <div id="gdPending" class="hidden">
-        <p style="margin-top:14px">Apri <a id="gdUrl" target="_blank" rel="noopener"></a> da qualunque dispositivo e inserisci il codice:</p>
-        <div class="big" id="gdCode"></div>
-      </div>
-      <div class="msg" id="gdMsg"></div>
-    </section>
-
-    <section>
-      <h2>Registro attività</h2>
-      <pre id="log"></pre>
-    </section>
   </div>
-</main>
+</div>
+
+<div id="app" class="hidden">
+  <header class="topbar">
+    <a class="brand" href="#panoramica"><svg><use href="#logo"/></svg>encluca <small>hub</small></a>
+    <span class="spacer"></span>
+    <span class="meta" id="ver"></span>
+    <button class="ghost small" id="logoutBtn">Esci</button>
+  </header>
+  <div class="layout">
+    <nav class="sidenav" aria-label="Sezioni">
+      <a href="#panoramica"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>Panoramica</a>
+      <a href="#dispositivi"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v10H4zm-2 12h20v-1H2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>Dispositivi</a>
+      <a href="#drive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.5 7.5 0 0 0 5.35 8.04 6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96"/></svg>Backup Google Drive</a>
+      <a href="#registro"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h12v2H3z"/></svg>Registro</a>
+    </nav>
+
+    <main class="content">
+      <div class="page-title" id="panoramica">
+        <div><div class="crumbs">encluca › Hub</div><h1>Panoramica</h1></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><span>File cifrati</span><b id="nFiles">0</b></div>
+        <div class="stat"><span>Spazio occupato</span><b id="nSize">0</b></div>
+        <div class="stat"><span>Dispositivi</span><b id="nDev">0</b></div>
+        <div class="stat"><span>Cassaforte</span><b id="nVault">–</b></div>
+      </div>
+
+      <div class="card warn hidden" id="pwWarn">
+        <div class="card-header"><h2>Cambia la password iniziale</h2><span class="chip wait">Da fare</span></div>
+        <div class="card-body">
+          <p>Stai usando la password generata al primo avvio. Scegline una tua: il file che contiene quella iniziale verrà cancellato.</p>
+          <div class="row">
+            <input id="oldPw" type="password" placeholder="Password attuale" autocomplete="current-password">
+            <input id="newPw" type="password" placeholder="Nuova password (min. 10 caratteri)" autocomplete="new-password">
+            <button id="pwBtn" class="primary">Cambia password</button>
+          </div>
+          <div class="msg" id="pwMsg"></div>
+        </div>
+      </div>
+
+      <div class="card" id="dispositivi">
+        <div class="card-header"><h2>Dispositivi</h2></div>
+        <div class="card-body">
+          <p>I computer autorizzati a sincronizzare la cassaforte. Il NAS non conosce la password della cassaforte: conserva solo dati cifrati.</p>
+          <table><thead><tr><th>Nome</th><th>Ultimo contatto</th><th></th></tr></thead><tbody id="devs"></tbody></table>
+          <label for="devName" style="margin-top:20px">Aggiungi un computer</label>
+          <div class="row">
+            <input id="devName" placeholder="Es. MacBook di Luca">
+            <input id="devUrl" placeholder="Indirizzo del NAS visto dai PC (facoltativo)" style="flex:1">
+            <button id="addBtn" class="primary">Aggiungi dispositivo</button>
+          </div>
+          <div id="codeBox" class="hidden">
+            <p style="margin-top:14px">Incolla questo codice nell'app encluca del computer. Vale per un solo dispositivo e non viene mostrato di nuovo.</p>
+            <span class="code" id="codeText"></span>
+            <button class="ghost" id="copyBtn">Copia codice</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="drive">
+        <div class="card-header"><h2>Backup su Google Drive</h2><span class="chip" id="gdChip">–</span></div>
+        <div class="card-body">
+          <p id="gdState"></p>
+          <div id="gdSetup">
+            <ol>
+              <li>Apri la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, crea un progetto e abilita la <b>Google Drive API</b>. È gratuita e non serve la fatturazione.</li>
+              <li>In <i>Schermata consenso OAuth</i> scegli <b>Esterno</b>, poi in <i>Pubblico</i> premi <b>Pubblica app</b> e porta lo stato a <b>In produzione</b>. In stato “Test” Google revoca l'accesso dopo 7 giorni.</li>
+              <li>Crea delle credenziali <b>ID client OAuth</b> di tipo <b>TV e dispositivi con input limitato</b>.</li>
+              <li>Incolla qui Client ID e Client Secret, poi premi <b>Collega Google Drive</b>.</li>
+            </ol>
+            <label for="gdId">Client ID</label><input id="gdId" class="full">
+            <label for="gdSecret">Client Secret</label><input id="gdSecret" class="full" type="password" placeholder="lascia vuoto per non cambiarlo">
+          </div>
+          <div class="row" style="margin-top:14px">
+            <label>Cartella su Drive<br><input id="gdFolder" style="width:180px"></label>
+            <label>Conserva versioni (giorni)<br><input id="gdRet" type="number" min="1" style="width:120px"></label>
+            <label>Backup completo ogni (min)<br><input id="gdInt" type="number" min="5" style="width:120px"></label>
+          </div>
+          <div class="row" style="margin-top:16px">
+            <button id="gdAuth" class="primary">Collega Google Drive</button>
+            <button id="gdRun" class="primary">Esegui backup ora</button>
+            <button id="gdSave" class="ghost">Salva impostazioni</button>
+            <button id="gdOff" class="danger">Scollega</button>
+          </div>
+          <div id="gdPending" class="hidden">
+            <p style="margin-top:16px">Apri <a id="gdUrl" target="_blank" rel="noopener"></a> da qualunque dispositivo e inserisci il codice:</p>
+            <div class="big" id="gdCode"></div>
+          </div>
+          <div class="msg" id="gdMsg"></div>
+        </div>
+      </div>
+
+      <div class="card" id="registro">
+        <div class="card-header"><h2>Registro attività</h2></div>
+        <div class="card-body"><pre class="log" id="log"></pre></div>
+      </div>
+    </main>
+  </div>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 async function api(path, body, method){
@@ -139,33 +137,37 @@ async function api(path, body, method){
 }
 const size = b => { const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024 && i<u.length-1){b/=1024;i++} return (i?b.toFixed(1):b)+' '+u[i]; };
 const when = t => (!t || t.startsWith('0001')) ? 'mai' : new Date(t).toLocaleString('it-IT');
-function showLogin(){ $('loginBox').classList.remove('hidden'); $('app').classList.add('hidden'); }
+const chip = (cls, text) => '<span class="chip '+cls+'">'+text+'</span>';
+function showLogin(){ $('loginBox').classList.remove('hidden'); $('app').classList.add('hidden'); $('loginPw').focus(); }
 let filled = false;
 async function refresh(){
   let s; try{ s = await api('/admin/api/status'); }catch(e){ return; }
   $('loginBox').classList.add('hidden'); $('app').classList.remove('hidden');
+  $('ver').textContent = 'v' + s.version;
   $('nFiles').textContent = s.files; $('nSize').textContent = size(s.bytes); $('nDev').textContent = s.devices.length;
   $('nVault').textContent = s.vaultCreated ? 'creata' : 'da creare';
   $('pwWarn').classList.toggle('hidden', !s.defaultPassword);
   const tb = $('devs'); tb.innerHTML = '';
-  if(!s.devices.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="3" style="color:var(--mute)">Nessun dispositivo: aggiungi il primo computer qui sotto.</td>'; tb.append(tr); }
+  if(!s.devices.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="3" class="empty">Nessun dispositivo: aggiungi il primo computer qui sotto.</td>'; tb.append(tr); }
   for(const d of s.devices){
     const tr = document.createElement('tr');
     const recent = d.lastSeen && (Date.now()-new Date(d.lastSeen)) < 5*60*1000;
-    tr.innerHTML = '<td></td><td></td><td style="text-align:right"><button class="danger">Revoca</button></td>';
+    tr.innerHTML = '<td></td><td></td><td style="text-align:right"><button class="danger small">Revoca</button></td>';
     tr.children[0].textContent = d.name;
-    tr.children[1].innerHTML = '<span class="dot '+(recent?'ok':'wait')+'"></span>'; tr.children[1].append(when(d.lastSeen));
+    tr.children[1].innerHTML = chip(recent?'ok':'wait', recent?'Attivo':'Inattivo') + ' ';
+    tr.children[1].append(when(d.lastSeen));
     tr.querySelector('button').onclick = async () => { if(confirm('Revocare “'+d.name+'”? Non potrà più sincronizzare.')){ await api('/admin/api/devices?id='+encodeURIComponent(d.id), {}, 'DELETE'); refresh(); } };
     tb.append(tr);
   }
   const g = s.gdrive;
-  let st;
-  if(!g.configured) st = '<span class="dot wait"></span>Non configurato.';
-  else if(!g.authorized) st = '<span class="dot wait"></span>Credenziali salvate, manca l\'autorizzazione.';
-  else if(g.running) st = '<span class="dot wait"></span>Backup in corso…';
-  else if(g.lastError) st = '<span class="dot ko"></span>Ultimo backup fallito: ';
-  else st = '<span class="dot ok"></span>Attivo. Ultimo backup riuscito: ' + when(g.lastOK) + (g.lastInfo ? ' ('+g.lastInfo+')' : '') + '.';
-  $('gdState').innerHTML = st; if(g.lastError && g.authorized && !g.running) $('gdState').append(g.lastError);
+  let c, st;
+  if(!g.configured){ c=['wait','Non configurato']; st='Il backup su Google Drive non è ancora configurato.'; }
+  else if(!g.authorized){ c=['wait','Da autorizzare']; st='Credenziali salvate: manca l\'autorizzazione dell\'account Google.'; }
+  else if(g.running){ c=['info','In corso']; st='Backup in corso…'; }
+  else if(g.lastError){ c=['ko','Errore']; st='Ultimo backup fallito: '; }
+  else { c=['ok','Attivo']; st='Ultimo backup riuscito: ' + when(g.lastOK) + (g.lastInfo ? ' ('+g.lastInfo+')' : '') + '.'; }
+  $('gdChip').className = 'chip ' + c[0]; $('gdChip').textContent = c[1];
+  $('gdState').textContent = st; if(g.lastError && g.authorized && !g.running) $('gdState').append(g.lastError);
   $('gdSetup').classList.toggle('hidden', g.authorized);
   $('gdAuth').classList.toggle('hidden', g.authorized); $('gdRun').classList.toggle('hidden', !g.authorized); $('gdOff').classList.toggle('hidden', !g.authorized);
   if(!filled){ $('gdId').value = g.clientId || ''; $('gdFolder').value = g.folderName; $('gdRet').value = g.retentionDays; $('gdInt').value = g.intervalMin; filled = true; }
@@ -173,12 +175,19 @@ async function refresh(){
   if(g.pending){ $('gdUrl').href = g.pending.url; $('gdUrl').textContent = g.pending.url; $('gdCode').textContent = g.pending.userCode; }
   $('log').textContent = s.log.join('\n');
 }
+// voce attiva nel menu laterale in base alla sezione visibile
+const links = [...document.querySelectorAll('.sidenav a')];
+const markActive = id => links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+id));
+const io = new IntersectionObserver(es => { for(const e of es) if(e.isIntersecting) markActive(e.target.id); }, {rootMargin:'-60px 0px -70% 0px'});
+for(const id of ['panoramica','dispositivi','drive','registro']) io.observe($(id));
+markActive('panoramica');
+
 $('loginBtn').onclick = async () => { $('loginMsg').textContent='';
   try{ await api('/admin/api/login', {Password:$('loginPw').value}); $('loginPw').value=''; refresh(); }catch(e){ $('loginMsg').textContent=e.message; } };
 $('loginPw').addEventListener('keydown', e => { if(e.key==='Enter') $('loginBtn').click(); });
 $('logoutBtn').onclick = async () => { await api('/admin/api/logout', {}); showLogin(); };
 $('pwBtn').onclick = async () => { try{ await api('/admin/api/password', {Old:$('oldPw').value, New:$('newPw').value}); $('pwMsg').textContent='Password cambiata.'; $('oldPw').value=$('newPw').value=''; refresh(); }catch(e){ $('pwMsg').textContent=e.message; } };
-$('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
+$('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('copyBtn').textContent='Copia codice'; $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
 $('copyBtn').onclick = () => navigator.clipboard.writeText($('codeText').textContent).then(()=>$('copyBtn').textContent='Copiato');
 const gdBody = () => ({clientId:$('gdId').value, clientSecret:$('gdSecret').value, folderName:$('gdFolder').value, retentionDays:+$('gdRet').value, intervalMin:+$('gdInt').value});
 $('gdSave').onclick = async () => { try{ await api('/admin/api/gdrive/config', gdBody()); $('gdSecret').value=''; $('gdMsg').textContent='Impostazioni salvate.'; filled=false; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
