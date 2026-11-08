@@ -1,0 +1,23 @@
+# CassaSync hub su TrueNAS Community Edition
+# Apps -> Discover Apps -> (menu ⋮) Install via YAML -> incolla questo file.
+#
+# Prima:
+#   1. crea un dataset, es. /mnt/tank/apps/cassasync, con le sottocartelle "bin" e "data"
+#   2. copia in "bin" il file cassasync del pacchetto linux-amd64
+#   3. dai la proprietà delle due cartelle all'utente "apps" (uid 568)
+# Sostituisci /mnt/tank con il percorso del tuo pool.
+services:
+  cassasync-hub:
+    image: alpine:3.20
+    container_name: cassasync-hub
+    command: ["/app/cassasync", "hub", "--data", "/data", "--listen", ":8443"]
+    user: "568:568"
+    volumes:
+      - /mnt/tank/apps/cassasync/bin:/app:ro
+      - /mnt/tank/apps/cassasync/data:/data
+    ports:
+      - "8443:8443"
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
