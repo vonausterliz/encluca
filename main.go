@@ -1,4 +1,4 @@
-// CassaSync: cartella personale cifrata, sincronizzata tramite il NAS e con backup su Google Drive.
+// Encluca: cartella personale cifrata, sincronizzata tramite il NAS e con backup su Google Drive.
 package main
 
 import (
@@ -17,7 +17,7 @@ import (
 	"time"
 )
 
-var Version = "0.1.0"
+var Version = "0.1.1"
 
 //go:embed web/*.html
 var webFS embed.FS
@@ -34,13 +34,13 @@ func serveUI(w http.ResponseWriter, name string) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, `CassaSync %s
+	fmt.Fprintf(os.Stderr, `Encluca %s
 
 Uso:
-  cassasync client [--data DIR] [--ui 127.0.0.1:8484]   servizio sul PC (interfaccia su http://127.0.0.1:8484)
-  cassasync hub    [--data DIR] [--listen :8443]        servizio sul NAS (interfaccia su https://NAS:8443)
-  cassasync hub-reset-password [--data DIR]             genera una nuova password amministratore dell'hub
-  cassasync version
+  encluca client [--data DIR] [--ui 127.0.0.1:8484]   servizio sul PC (interfaccia su http://127.0.0.1:8484)
+  encluca hub    [--data DIR] [--listen :8443]        servizio sul NAS (interfaccia su https://NAS:8443)
+  encluca hub-reset-password [--data DIR]             genera una nuova password amministratore dell'hub
+  encluca version
 `, Version)
 }
 
@@ -53,11 +53,11 @@ func main() {
 	defer stop()
 	switch os.Args[1] {
 	case "version", "--version", "-v":
-		fmt.Println("CassaSync", Version)
+		fmt.Println("Encluca", Version)
 	case "hub":
 		fs := flag.NewFlagSet("hub", flag.ExitOnError)
-		data := fs.String("data", envOr("CASSASYNC_DATA", "/data"), "cartella dati dell'hub")
-		listen := fs.String("listen", envOr("CASSASYNC_LISTEN", ":8443"), "indirizzo di ascolto")
+		data := fs.String("data", envOr("ENCLUCA_DATA", "/data"), "cartella dati dell'hub")
+		listen := fs.String("listen", envOr("ENCLUCA_LISTEN", ":8443"), "indirizzo di ascolto")
 		fs.Parse(os.Args[2:])
 		h, err := newHub(*data, *listen)
 		if err != nil {
@@ -68,7 +68,7 @@ func main() {
 		}
 	case "hub-reset-password":
 		fs := flag.NewFlagSet("hub-reset-password", flag.ExitOnError)
-		data := fs.String("data", envOr("CASSASYNC_DATA", "/data"), "cartella dati dell'hub")
+		data := fs.String("data", envOr("ENCLUCA_DATA", "/data"), "cartella dati dell'hub")
 		fs.Parse(os.Args[2:])
 		h, err := newHub(*data, "")
 		if err != nil {
@@ -84,8 +84,8 @@ func main() {
 		fmt.Println("Riavvia il servizio hub per applicarla.")
 	case "client":
 		fs := flag.NewFlagSet("client", flag.ExitOnError)
-		data := fs.String("data", envOr("CASSASYNC_DATA", defaultClientDir()), "cartella dati del client")
-		ui := fs.String("ui", envOr("CASSASYNC_UI", "127.0.0.1:8484"), "indirizzo dell'interfaccia (solo locale)")
+		data := fs.String("data", envOr("ENCLUCA_DATA", defaultClientDir()), "cartella dati del client")
+		ui := fs.String("ui", envOr("ENCLUCA_UI", "127.0.0.1:8484"), "indirizzo dell'interfaccia (solo locale)")
 		fs.Parse(os.Args[2:])
 		if err := runClient(ctx, *data, *ui); err != nil {
 			fatal(err)
@@ -124,7 +124,7 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandler(uiAddr)), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	c.log.Printf("CassaSync %s avviato: apri http://%s", Version, uiAddr)
+	c.log.Printf("Encluca %s avviato: apri http://%s", Version, uiAddr)
 	select {
 	case err := <-errc:
 		return err
@@ -152,7 +152,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	mux := http.NewServeMux()
 	post := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.Header.Get("X-CassaSync") != "1" {
+			if r.Method != http.MethodPost || r.Header.Get("X-Encluca") != "1" {
 				writeErr(w, http.StatusForbidden, "richiesta non valida")
 				return
 			}

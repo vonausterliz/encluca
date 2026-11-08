@@ -57,10 +57,10 @@ type Device struct {
 }
 
 type hubConfig struct {
-	AdminHash string        `json:"adminHash"`
-	AdminSalt string        `json:"adminSalt"`
-	Devices   []*Device     `json:"devices"`
-	GDrive    GDriveConfig  `json:"gdrive"`
+	AdminHash string       `json:"adminHash"`
+	AdminSalt string       `json:"adminSalt"`
+	Devices   []*Device    `json:"devices"`
+	GDrive    GDriveConfig `json:"gdrive"`
 }
 
 type Hub struct {
@@ -95,7 +95,7 @@ func newHub(dir, listen string) (*Hub, error) {
 			return nil, err
 		}
 	}
-	h.log = newRingLog(filepath.Join(dir, "cassasync-hub.log"), 300)
+	h.log = newRingLog(filepath.Join(dir, "encluca-hub.log"), 300)
 	// pulizia file temporanei rimasti da un crash
 	if ents, err := os.ReadDir(h.tmpDir()); err == nil {
 		for _, e := range ents {
@@ -177,12 +177,12 @@ func (h *Hub) loadOrCreateCert() error {
 		}
 		tmpl := &x509.Certificate{
 			SerialNumber: big.NewInt(time.Now().UnixNano()),
-			Subject:      pkix.Name{CommonName: "cassasync-hub"},
+			Subject:      pkix.Name{CommonName: "encluca-hub"},
 			NotBefore:    time.Now().Add(-time.Hour),
 			NotAfter:     time.Now().AddDate(30, 0, 0),
 			KeyUsage:     x509.KeyUsageDigitalSignature,
 			ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-			DNSNames:     []string{"cassasync-hub"},
+			DNSNames:     []string{"encluca-hub"},
 		}
 		der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
 		if err != nil {
@@ -472,7 +472,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 // ---------- amministrazione ----------
 
 func (h *Hub) adminOK(r *http.Request) bool {
-	c, err := r.Cookie("cs_session")
+	c, err := r.Cookie("el_session")
 	if err != nil {
 		return false
 	}
@@ -488,7 +488,7 @@ func (h *Hub) adminOK(r *http.Request) bool {
 
 func (h *Hub) withAdmin(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Header.Get("X-CassaSync") != "1" {
+		if r.Method != http.MethodGet && r.Header.Get("X-Encluca") != "1" {
 			writeErr(w, http.StatusForbidden, "richiesta non valida")
 			return
 		}
@@ -510,7 +510,7 @@ var loginLimiter = struct {
 }{}
 
 func (h *Hub) adminLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-CassaSync") != "1" || r.Method != http.MethodPost {
+	if r.Header.Get("X-Encluca") != "1" || r.Method != http.MethodPost {
 		writeErr(w, http.StatusForbidden, "richiesta non valida")
 		return
 	}
@@ -536,17 +536,17 @@ func (h *Hub) adminLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnauthorized, "password errata")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: "cs_session", Value: sid, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 3600})
+	http.SetCookie(w, &http.Cookie{Name: "el_session", Value: sid, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 3600})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (h *Hub) adminLogout(w http.ResponseWriter, r *http.Request) {
-	if c, err := r.Cookie("cs_session"); err == nil {
+	if c, err := r.Cookie("el_session"); err == nil {
 		h.mu.Lock()
 		delete(h.sessions, c.Value)
 		h.mu.Unlock()
 	}
-	http.SetCookie(w, &http.Cookie{Name: "cs_session", Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "el_session", Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -572,7 +572,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 		"version": Version, "files": files, "bytes": size, "seq": seq,
 		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint,
 		"defaultPassword": pwFileErr == nil,
-		"gdrive": h.gd.status(), "log": h.log.Lines(),
+		"gdrive":          h.gd.status(), "log": h.log.Lines(),
 	})
 }
 
@@ -603,7 +603,7 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		}
 		code, _ := json.Marshal(map[string]string{"u": u, "t": tok, "f": h.fingerprint})
 		h.log.Printf("Nuovo dispositivo abbinabile: %q", d.Name)
-		writeJSON(w, http.StatusOK, map[string]string{"code": "CS1-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
+		writeJSON(w, http.StatusOK, map[string]string{"code": "EL1-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		h.mu.Lock()
@@ -661,7 +661,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func (h *Hub) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/ping", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"app": "cassasync-hub", "version": Version})
+		writeJSON(w, http.StatusOK, map[string]string{"app": "encluca-hub", "version": Version})
 	})
 	mux.HandleFunc("/api/v1/meta", h.withDevice(h.apiMeta))
 	mux.HandleFunc("/api/v1/changes", h.withDevice(h.apiChanges))
@@ -701,7 +701,7 @@ func (h *Hub) run(ctx context.Context) error {
 		defer cancel()
 		srv.Shutdown(sctx)
 	}()
-	h.log.Printf("CassaSync hub %s in ascolto su https://%s (impronta certificato %s…)", Version, h.listen, h.fingerprint[:16])
+	h.log.Printf("Encluca hub %s in ascolto su https://%s (impronta certificato %s…)", Version, h.listen, h.fingerprint[:16])
 	err := srv.ListenAndServeTLS("", "")
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

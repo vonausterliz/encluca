@@ -1,12 +1,12 @@
-# CassaSync
+# Encluca
 
 Una cartella personale **cifrata**, sincronizzata tra i tuoi computer (Linux, macOS, Windows)
-tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo programma: `cassasync`.
+tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo programma: `encluca`.
 
 ```
   PC (client)                         NAS (hub)                         Google Drive
   ─────────────                       ─────────                         ────────────
-  cartella "CassaSync - APERTA"       solo file cifrati                 copia cifrata
+  cartella "Encluca - APERTA"       solo file cifrati                 copia cifrata
   (in chiaro solo quando la apri)  ⇄  + elenco revisioni           →    + _versioni/<data>
   copia locale cifrata                + dispositivi autorizzati          (scope drive.file)
 ```
@@ -14,12 +14,12 @@ tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo program
 - **La password non lascia mai i tuoi PC.** Il NAS e Google vedono solo dati cifrati, anche i nomi di file e cartelle.
 - **Funziona offline.** Le modifiche vengono cifrate subito sul PC e inviate appena il NAS è raggiungibile.
 - **Nessuna modifica va persa.** Se due PC cambiano lo stesso file mentre sono scollegati, una delle due versioni viene salvata come `nome (conflitto PC 2026-11-08 19.23.05).ext`.
-- **Formato aperto.** I file cifrati sono nel formato di [rclone crypt](https://rclone.org/crypt/): anche senza CassaSync puoi recuperarli con `rclone` (vedi in fondo).
+- **Formato aperto.** I file cifrati sono nel formato di [rclone crypt](https://rclone.org/crypt/): anche senza Encluca puoi recuperarli con `rclone` (vedi in fondo).
 
 ## Come si usa ogni giorno
 
-1. Apri **CassaSync** (icona sul desktop o http://127.0.0.1:8484).
-2. Inserisci la password e premi **Apri**: compare la cartella `CassaSync - APERTA` nella tua home. La fascia diventa gialla, a indicare che i file sono in chiaro.
+1. Apri **Encluca** (icona sul desktop o http://127.0.0.1:8484).
+2. Inserisci la password e premi **Apri**: compare la cartella `Encluca - APERTA` nella tua home. La fascia diventa gialla, a indicare che i file sono in chiaro.
 3. Lavora sui file normalmente. Ogni modifica viene cifrata e inviata entro circa 2 secondi.
 4. Quando hai finito premi **Chiudi la cassaforte**: le ultime modifiche vengono cifrate e la cartella in chiaro viene cancellata.
 
@@ -29,10 +29,10 @@ Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio
 
 ### 1. NAS (TrueNAS Community Edition)
 
-1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/cassasync`, con le sottocartelle `bin` e `data`.
-2. Copia in `bin` il file `cassasync` del pacchetto **linux-amd64**.
+1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/encluca`, con le sottocartelle `bin` e `data`.
+2. Copia in `bin` il file `encluca` del pacchetto **linux-amd64**.
 3. Assegna all'utente `apps` (uid 568) **solo** le cartelle nuove, senza `-R`:
-   `chown 568:568 /mnt/tank/cassasync/bin /mnt/tank/cassasync/data`
+   `chown 568:568 /mnt/tank/encluca/bin /mnt/tank/encluca/data`
 4. Vai in **Apps → Discover Apps → ⋮ → Install via YAML** e incolla `docker-compose.yaml`, correggendo i percorsi `/mnt/tank/...`.
    Se la porta 8443 è già usata da un'altra app, cambia solo il numero a sinistra (es. `"18443:8443"`).
 5. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
@@ -51,11 +51,11 @@ Quando aggiungi un dispositivo, indica nel campo "Indirizzo NAS visto dai PC" l'
 | Windows | tasto destro su `install.ps1` → *Esegui con PowerShell* (oppure `powershell -ExecutionPolicy Bypass -File install.ps1`) |
 
 Poi:
-1. Sul NAS: **Aggiungi dispositivo** → copia il codice `CS1-…`.
+1. Sul NAS: **Aggiungi dispositivo** → copia il codice `EL1-…`.
 2. Sul PC: incolla il codice e premi **Collega**.
 3. Sul primo PC: **Crea la cassaforte** scegliendo la password. Sugli altri PC: **Apri** con la stessa password.
 
-Per mettere dentro i dati esistenti, apri la cassaforte e copia i file nella cartella `CassaSync - APERTA`.
+Per mettere dentro i dati esistenti, apri la cassaforte e copia i file nella cartella `Encluca - APERTA`.
 
 Disinstallazione: `./install.sh uninstall` (Linux e macOS) oppure `install.ps1 -Uninstall` (Windows). I dati cifrati restano dove sono.
 
@@ -75,7 +75,7 @@ Dall'interfaccia del NAS, sezione **Backup su Google Drive**, segui i 4 passaggi
 
 | Dove | Cassaforte chiusa | Cassaforte aperta |
 |---|---|---|
-| PC – cartella `CassaSync - APERTA` | non esiste | **file in chiaro** |
+| PC – cartella `Encluca - APERTA` | non esiste | **file in chiaro** |
 | PC – copia locale (`mirror/`) | cifrato | cifrato |
 | NAS | cifrato | cifrato |
 | Google Drive | cifrato | cifrato |
@@ -85,7 +85,7 @@ Mentre la cassaforte è aperta, i programmi che usi (Office, anteprime, indicizz
 
 Il NAS conosce soltanto: numero e dimensione dei file, date di modifica e struttura delle cartelle (con i nomi cifrati).
 
-## Limiti di questa versione (0.1)
+## Limiti di questa versione (0.1.x)
 
 - **Cartelle vuote** non vengono sincronizzate: si sincronizzano solo i file.
 - **Nomi molto lunghi.** Un nome di file o cartella oltre circa 140 caratteri non può essere cifrato: l'app lo segnala negli avvisi.
@@ -94,30 +94,30 @@ Il NAS conosce soltanto: numero e dimensione dei file, date di modifica e strutt
 - **Interfaccia nel browser.** L'interfaccia è una pagina web locale con un collegamento sul desktop; non c'è un'icona nella barra di sistema.
 - **Certificato autofirmato.** Il NAS usa un certificato autofirmato. I PC lo verificano tramite l'impronta contenuta nel codice di abbinamento; il browser invece mostra un avviso.
 
-## Recupero d'emergenza senza CassaSync
+## Recupero d'emergenza senza Encluca
 
-Ti servono la password e il valore `salt` contenuto in `cassasync-vault.json`, che trovi nella cartella dati del NAS e su Google Drive.
+Ti servono la password e il valore `salt` contenuto in `encluca-vault.json`, che trovi nella cartella dati del NAS e su Google Drive.
 
 ```bash
-rclone config create cs-recupero crypt \
+rclone config create encluca-recupero crypt \
   remote=/percorso/della/cartella/vault \
   filename_encryption=standard directory_name_encryption=true \
   password="$(rclone obscure 'LA-TUA-PASSWORD')" \
   password2="$(rclone obscure 'IL-SALT')"
-rclone copy cs-recupero: ./recuperati
+rclone copy encluca-recupero: ./recuperati
 ```
 
-Per il backup su Drive, usa come `remote` un remote Google Drive di rclone, ad esempio `gd:CassaSync/vault`.
+Per il backup su Drive, usa come `remote` un remote Google Drive di rclone, ad esempio `gd:Encluca/vault`.
 
 ## Dove stanno i file
 
 | | Percorso |
 |---|---|
-| Dati client Linux | `~/.local/share/cassasync/` |
-| Dati client macOS | `~/Library/Application Support/CassaSync/` |
-| Dati client Windows | `%LOCALAPPDATA%\CassaSync\` |
-| Registro client | `cassasync.log` nella cartella dati |
-| Dati hub | `/data` nel container (= `/mnt/tank/cassasync/data`) |
+| Dati client Linux | `~/.local/share/encluca/` |
+| Dati client macOS | `~/Library/Application Support/Encluca/` |
+| Dati client Windows | `%LOCALAPPDATA%\Encluca\` |
+| Registro client | `encluca.log` nella cartella dati |
+| Dati hub | `/data` nel container (= `/mnt/tank/encluca/data`) |
 
 ## Sviluppo
 

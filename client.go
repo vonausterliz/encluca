@@ -25,23 +25,23 @@ import (
 	"sync"
 	"time"
 
-	"cassasync/internal/rcrypt"
+	"encluca/internal/rcrypt"
 )
 
 const (
 	readmeName   = "LEGGIMI - CASSAFORTE APERTA.txt"
-	tmpPrefix    = ".cassasync-tmp-"
-	checkPlain   = "cassasync-password-ok"
+	tmpPrefix    = ".encluca-tmp-"
+	checkPlain   = "encluca-password-ok"
 	scanInterval = 2 * time.Second
 )
 
 const readmeText = `QUESTA CARTELLA CONTIENE I TUOI FILE DECRIPTATI (IN CHIARO).
 
-È stata creata da CassaSync quando hai aperto la cassaforte.
+È stata creata da Encluca quando hai aperto la cassaforte.
 Ogni modifica che fai qui viene cifrata e inviata al NAS entro pochi secondi
 (oppure appena il NAS torna raggiungibile).
 
-Quando hai finito, chiudi la cassaforte da CassaSync (http://127.0.0.1:8484):
+Quando hai finito, chiudi la cassaforte da Encluca (http://127.0.0.1:8484):
 la cartella verrà cancellata e sul disco resteranno solo dati cifrati.
 
 Questo file non viene sincronizzato.
@@ -109,11 +109,11 @@ type Client struct {
 	pullReset chan struct{}
 }
 
-func (c *Client) cfgPath() string    { return filepath.Join(c.dir, "config.json") }
-func (c *Client) statePath() string  { return filepath.Join(c.dir, "state.json") }
-func (c *Client) metaCache() string  { return filepath.Join(c.dir, "vault-meta.json") }
-func (c *Client) mirrorDir() string  { return filepath.Join(c.dir, "mirror") }
-func (c *Client) tmpDir() string     { return filepath.Join(c.dir, "tmp") }
+func (c *Client) cfgPath() string   { return filepath.Join(c.dir, "config.json") }
+func (c *Client) statePath() string { return filepath.Join(c.dir, "state.json") }
+func (c *Client) metaCache() string { return filepath.Join(c.dir, "vault-meta.json") }
+func (c *Client) mirrorDir() string { return filepath.Join(c.dir, "mirror") }
+func (c *Client) tmpDir() string    { return filepath.Join(c.dir, "tmp") }
 func (c *Client) mirrorPath(enc string) string {
 	return filepath.Join(c.mirrorDir(), filepath.FromSlash(enc))
 }
@@ -125,7 +125,7 @@ func newClient(dir string) (*Client, error) {
 			return nil, err
 		}
 	}
-	c.log = newRingLog(filepath.Join(dir, "cassasync.log"), 300)
+	c.log = newRingLog(filepath.Join(dir, "encluca.log"), 300)
 	if ents, err := os.ReadDir(c.tmpDir()); err == nil {
 		for _, e := range ents {
 			os.Remove(filepath.Join(c.tmpDir(), e.Name()))
@@ -203,7 +203,9 @@ type httpStatusErr struct {
 	Body []byte
 }
 
-func (e *httpStatusErr) Error() string { return fmt.Sprintf("NAS HTTP %d: %s", e.Code, strings.TrimSpace(string(e.Body))) }
+func (e *httpStatusErr) Error() string {
+	return fmt.Sprintf("NAS HTTP %d: %s", e.Code, strings.TrimSpace(string(e.Body)))
+}
 
 func (c *Client) req(ctx context.Context, method, p string, q url.Values, body io.Reader, size int64) (*http.Response, error) {
 	c.mu.Lock()
@@ -934,10 +936,10 @@ func (c *Client) scanLoop(ctx context.Context) {
 
 func parsePairCode(code string) (u, tok, fp string, err error) {
 	code = strings.TrimSpace(code)
-	if !strings.HasPrefix(code, "CS1-") {
+	if !strings.HasPrefix(code, "EL1-") {
 		return "", "", "", errors.New("codice di abbinamento non valido")
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(code, "CS1-"))
+	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(code, "EL1-"))
 	if err != nil {
 		return "", "", "", errors.New("codice di abbinamento non valido")
 	}

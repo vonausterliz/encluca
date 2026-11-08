@@ -1,4 +1,4 @@
-module cassasync
+module encluca
 
 go 1.22
 

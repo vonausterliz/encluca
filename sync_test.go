@@ -61,7 +61,7 @@ func (env *testEnv) pairCode(name string) string {
 	env.hub.cfg.Devices = append(env.hub.cfg.Devices, &Device{ID: randHex(6), Name: name, TokenHash: hex.EncodeToString(sum[:])})
 	env.hub.mu.Unlock()
 	b, _ := json.Marshal(map[string]string{"u": env.srv.URL, "t": tok, "f": env.hub.fingerprint})
-	return "CS1-" + base64.RawURLEncoding.EncodeToString(b)
+	return "EL1-" + base64.RawURLEncoding.EncodeToString(b)
 }
 
 func (env *testEnv) newClient(name string) *Client {
@@ -70,7 +70,7 @@ func (env *testEnv) newClient(name string) *Client {
 	if err != nil {
 		env.t.Fatal(err)
 	}
-	c.cfg.WorkDir = filepath.Join(dir, "CassaSync - APERTA")
+	c.cfg.WorkDir = filepath.Join(dir, "Encluca - APERTA")
 	if err := c.Pair(env.pairCode(name), "", name); err != nil {
 		env.t.Fatal(err)
 	}

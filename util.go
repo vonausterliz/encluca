@@ -179,27 +179,27 @@ func defaultClientDir() string {
 	switch runtime.GOOS {
 	case "windows":
 		if d := os.Getenv("LOCALAPPDATA"); d != "" {
-			return filepath.Join(d, "CassaSync")
+			return filepath.Join(d, "Encluca")
 		}
-		return filepath.Join(home, "AppData", "Local", "CassaSync")
+		return filepath.Join(home, "AppData", "Local", "Encluca")
 	case "darwin":
-		return filepath.Join(home, "Library", "Application Support", "CassaSync")
+		return filepath.Join(home, "Library", "Application Support", "Encluca")
 	default:
 		if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-			return filepath.Join(d, "cassasync")
+			return filepath.Join(d, "encluca")
 		}
-		return filepath.Join(home, ".local", "share", "cassasync")
+		return filepath.Join(home, ".local", "share", "encluca")
 	}
 }
 
 func defaultWorkDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, "CassaSync - APERTA")
+	return filepath.Join(home, "Encluca - APERTA")
 }
 
 // markFolder rende la cartella aperta riconoscibile anche nel file manager (icona su KDE/Dolphin).
 func markFolder(dir string) {
 	if runtime.GOOS == "linux" {
-		os.WriteFile(filepath.Join(dir, ".directory"), []byte("[Desktop Entry]\nIcon=folder-important\nComment=CassaSync: cartella DECRIPTATA\n"), 0o600)
+		os.WriteFile(filepath.Join(dir, ".directory"), []byte("[Desktop Entry]\nIcon=folder-important\nComment=Encluca: cartella DECRIPTATA\n"), 0o600)
 	}
 }

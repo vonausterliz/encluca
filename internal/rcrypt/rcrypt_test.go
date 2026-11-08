@@ -107,7 +107,7 @@ func TestRcloneCompat(t *testing.T) {
 	}
 
 	// 2) noi cifriamo -> rclone decifra
-	ours := []byte("contenuto scritto da cassasync\n")
+	ours := []byte("contenuto scritto da encluca\n")
 	p2, _ := c.EncryptPath("Altra/note.txt")
 	enc2, _ := c.Seal(ours)
 	full := filepath.Join(raw, filepath.FromSlash(p2))

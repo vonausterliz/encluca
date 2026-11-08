@@ -1,20 +1,20 @@
-# CassaSync hub su TrueNAS Community Edition
+# Encluca hub su TrueNAS Community Edition
 # Apps -> Discover Apps -> (menu ⋮) Install via YAML -> incolla questo file.
 #
 # Prima:
-#   1. crea un NUOVO dataset, es. /mnt/tank/cassasync, con le sottocartelle "bin" e "data"
-#   2. copia in "bin" il file cassasync del pacchetto linux-amd64
-#   3. chown 568:568 /mnt/tank/cassasync/bin /mnt/tank/cassasync/data  (senza -R)
+#   1. crea un NUOVO dataset, es. /mnt/tank/encluca, con le sottocartelle "bin" e "data"
+#   2. copia in "bin" il file encluca del pacchetto linux-amd64
+#   3. chown 568:568 /mnt/tank/encluca/bin /mnt/tank/encluca/data  (senza -R)
 # Sostituisci /mnt/tank con il percorso del tuo pool.
 services:
-  cassasync-hub:
+  encluca-hub:
     image: alpine:3.20
-    container_name: cassasync-hub
-    command: ["/app/cassasync", "hub", "--data", "/data", "--listen", ":8443"]
+    container_name: encluca-hub
+    command: ["/app/encluca", "hub", "--data", "/data", "--listen", ":8443"]
     user: "568:568"
     volumes:
-      - /mnt/tank/cassasync/bin:/app:ro
-      - /mnt/tank/cassasync/data:/data
+      - /mnt/tank/encluca/bin:/app:ro
+      - /mnt/tank/encluca/data:/data
     ports:
       - "8443:8443"
     restart: unless-stopped

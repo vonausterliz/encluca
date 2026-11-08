@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CassaSync NAS</title>
+<title>Encluca NAS</title>
 <style>
 :root{ --steel:#2F3A45; --paper:#EEF1F3; --card:#FFFFFF; --ink:#1C2228; --mute:#5E6B76; --line:#D5DCE1; --amber:#E0A100; --teal:#2E7D6B; --red:#B3261E; }
 @media (prefers-color-scheme: dark){ :root{ --paper:#151A1F; --card:#1E252C; --ink:#E6EBEF; --mute:#9AA7B2; --line:#2E3842; --steel:#26313B; } }
@@ -45,7 +45,7 @@ pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;ma
 <main>
   <div id="loginBox" class="login hidden">
     <section>
-      <h2>CassaSync sul NAS</h2>
+      <h2>Encluca sul NAS</h2>
       <p>Accedi con la password amministratore. Al primo avvio la trovi nel registro dell'app o nel file <code>admin-password.txt</code> della cartella dati.</p>
       <input id="loginPw" type="password" class="full" placeholder="Password amministratore" autocomplete="current-password">
       <div class="row" style="margin-top:12px"><button id="loginBtn">Accedi</button></div>
@@ -54,7 +54,7 @@ pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;ma
   </div>
 
   <div id="app" class="hidden">
-    <header><h1>CassaSync sul NAS</h1><button class="ghost" id="logoutBtn">Esci</button></header>
+    <header><h1>Encluca sul NAS</h1><button class="ghost" id="logoutBtn">Esci</button></header>
 
     <div class="band">
       <div><b id="nFiles">0</b><span>file cifrati</span></div>
@@ -85,7 +85,7 @@ pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;ma
         <button id="addBtn">Aggiungi dispositivo</button>
       </div>
       <div id="codeBox" class="hidden">
-        <p style="margin-top:12px">Incolla questo codice nell'app CassaSync del computer. Vale per un solo dispositivo e non viene mostrato di nuovo.</p>
+        <p style="margin-top:12px">Incolla questo codice nell'app Encluca del computer. Vale per un solo dispositivo e non viene mostrato di nuovo.</p>
         <span class="code" id="codeText"></span>
         <button class="ghost" id="copyBtn">Copia codice</button>
       </div>
@@ -131,7 +131,7 @@ pre{white-space:pre-wrap;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;ma
 <script>
 const $ = id => document.getElementById(id);
 async function api(path, body, method){
-  const opt = {headers:{'X-CassaSync':'1','Content-Type':'application/json'}};
+  const opt = {headers:{'X-Encluca':'1','Content-Type':'application/json'}};
   if(body !== undefined || method){ opt.method = method || 'POST'; opt.body = JSON.stringify(body || {}); }
   const r = await fetch(path, opt); const j = await r.json().catch(()=>({}));
   if(r.status === 401 && path !== '/admin/api/login'){ showLogin(); throw new Error('accesso richiesto'); }

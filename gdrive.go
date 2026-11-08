@@ -36,33 +36,33 @@ type gdFile struct {
 }
 
 type gdState struct {
-	RootID     string            `json:"rootId"`
-	VaultID    string            `json:"vaultId"`
-	VersionsID string            `json:"versionsId"`
-	MetaID     string            `json:"metaId"`
-	MetaSHA    string            `json:"metaSha"`
-	ReadmeID   string            `json:"readmeId"`
-	Folders    map[string]string `json:"folders"`
+	RootID     string             `json:"rootId"`
+	VaultID    string             `json:"vaultId"`
+	VersionsID string             `json:"versionsId"`
+	MetaID     string             `json:"metaId"`
+	MetaSHA    string             `json:"metaSha"`
+	ReadmeID   string             `json:"readmeId"`
+	Folders    map[string]string  `json:"folders"`
 	Files      map[string]*gdFile `json:"files"`
 }
 
 type GDrive struct {
-	h        *Hub
-	mu       sync.Mutex
-	st       gdState
-	access   string
-	expiry   time.Time
-	dirty    bool
-	lastChg  time.Time
-	trigger  chan struct{}
-	running  bool
-	lastRun  time.Time
-	lastOK   time.Time
-	lastErr  string
-	lastInfo string
-	pending  map[string]any // autorizzazione in corso (device flow)
-	verFolder string        // cartella versioni del giro corrente
-	httpc    *http.Client
+	h         *Hub
+	mu        sync.Mutex
+	st        gdState
+	access    string
+	expiry    time.Time
+	dirty     bool
+	lastChg   time.Time
+	trigger   chan struct{}
+	running   bool
+	lastRun   time.Time
+	lastOK    time.Time
+	lastErr   string
+	lastInfo  string
+	pending   map[string]any // autorizzazione in corso (device flow)
+	verFolder string         // cartella versioni del giro corrente
+	httpc     *http.Client
 }
 
 const (
@@ -92,7 +92,7 @@ func (g *GDrive) cfg() GDriveConfig {
 	defer g.h.mu.Unlock()
 	c := g.h.cfg.GDrive
 	if c.FolderName == "" {
-		c.FolderName = "CassaSync"
+		c.FolderName = "Encluca"
 	}
 	if c.RetentionDays <= 0 {
 		c.RetentionDays = 30
@@ -363,7 +363,9 @@ func (g *GDrive) jsonCall(ctx context.Context, c GDriveConfig, method, u string,
 }
 
 func (g *GDrive) createFolder(ctx context.Context, c GDriveConfig, name, parent string) (string, error) {
-	var out struct{ ID string `json:"id"` }
+	var out struct {
+		ID string `json:"id"`
+	}
 	err := g.jsonCall(ctx, c, http.MethodPost, gDriveAPI+"/files?fields=id", map[string]any{"name": name, "mimeType": folderMime, "parents": []string{parent}}, &out)
 	return out.ID, err
 }
@@ -408,7 +410,9 @@ func (g *GDrive) upload(ctx context.Context, c GDriveConfig, local, name, parent
 	if loc == "" {
 		return "", errors.New("Drive non ha restituito l'URL di upload")
 	}
-	var out struct{ ID string `json:"id"` }
+	var out struct {
+		ID string `json:"id"`
+	}
 	if _, err := g.do(ctx, c, http.MethodPut, loc, f, info.Size(), map[string]string{"Content-Type": "application/octet-stream"}, &out); err != nil {
 		return "", err
 	}
@@ -450,23 +454,23 @@ func (g *GDrive) moveToVersions(ctx context.Context, c GDriveConfig, p string, f
 	return err
 }
 
-const recoveryReadme = `CassaSync - backup cifrato
+const recoveryReadme = `Encluca - backup cifrato
 ==========================
 
 Questa cartella contiene una copia CIFRATA della tua cassaforte.
 
 - vault/              file cifrati (formato rclone crypt, nomi cifrati)
 - _versioni/          copie precedenti di file modificati o cancellati, per data
-- cassasync-vault.json  parametri pubblici della cassaforte (contiene il "salt")
+- encluca-vault.json  parametri pubblici della cassaforte (contiene il "salt")
 
-Recupero senza CassaSync, con rclone (https://rclone.org):
+Recupero senza Encluca, con rclone (https://rclone.org):
   1. configura un remote Google Drive, es. "gd"
   2. configura un remote di tipo "crypt" con:
-       remote    = gd:CassaSync/vault
+       remote    = gd:Encluca/vault
        filename_encryption = standard
        directory_name_encryption = true
        password  = la password della cassaforte
-       password2 = il valore "salt" in cassasync-vault.json
+       password2 = il valore "salt" in encluca-vault.json
   3. rclone copy <remote-crypt>: /cartella/di/destinazione
 `
 
@@ -500,7 +504,7 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 	}
 	if meta, rerr := os.ReadFile(g.h.metaPath()); rerr == nil && sha256Hex(meta) != g.st.MetaSHA {
 		if g.st.MetaID == "" {
-			g.st.MetaID, err = g.uploadBytes(ctx, c, meta, "cassasync-vault.json", g.st.RootID)
+			g.st.MetaID, err = g.uploadBytes(ctx, c, meta, "encluca-vault.json", g.st.RootID)
 		} else {
 			err = g.updateContent(ctx, c, g.st.MetaID, meta)
 		}

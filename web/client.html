@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CassaSync</title>
+<title>Encluca</title>
 <style>
 :root{
   --steel:#2F3A45; --steel-2:#3D4B58; --paper:#EEF1F3; --card:#FFFFFF; --ink:#1C2228; --mute:#5E6B76;
@@ -63,14 +63,14 @@ label{display:block;margin:12px 0 4px;color:var(--mute);font-size:14px}
 </head>
 <body>
 <main>
-  <header><h1>CassaSync</h1><span id="device"></span></header>
+  <header><h1>Encluca</h1><span id="device"></span></header>
 
   <!-- abbinamento -->
   <section id="pairBox" class="hidden">
     <h3>Collega questo computer al NAS</h3>
-    <p>Sul NAS apri l'interfaccia di CassaSync, premi <b>Aggiungi dispositivo</b> e incolla qui il codice che compare.</p>
+    <p>Sul NAS apri l'interfaccia di Encluca, premi <b>Aggiungi dispositivo</b> e incolla qui il codice che compare.</p>
     <label for="pairCode">Codice di abbinamento</label>
-    <input id="pairCode" class="full" placeholder="CS1-…" autocomplete="off">
+    <input id="pairCode" class="full" placeholder="EL1-…" autocomplete="off">
     <label for="pairName">Nome di questo computer</label>
     <input id="pairName" class="full">
     <label for="pairUrl">Indirizzo del NAS (facoltativo, se diverso da quello nel codice)</label>
@@ -138,7 +138,7 @@ label{display:block;margin:12px 0 4px;color:var(--mute);font-size:14px}
 const $ = id => document.getElementById(id);
 let S = null, forcePair = false;
 async function api(path, body){
-  const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-CassaSync':'1'}, body:JSON.stringify(body)});
+  const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Encluca':'1'}, body:JSON.stringify(body)});
   const j = await r.json().catch(()=>({}));
   if(!r.ok) throw new Error(j.error || ('errore ' + r.status));
   return j;
@@ -202,7 +202,7 @@ function render(){
   $('hubInfo').textContent = s.paired ? s.hubUrl : 'nessuno';
   $('log').textContent = s.log.join('\n');
 }
-async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio CassaSync non risponde.'; } }
+async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio Encluca non risponde.'; } }
 
 $('pairBtn').onclick = async () => { busy($('pairBtn'),true); $('pairMsg').textContent='Collegamento…';
   try{ await api('/api/pair',{Code:$('pairCode').value, Name:$('pairName').value, HubURL:$('pairUrl').value}); $('pairMsg').textContent=''; $('pairCode').value=''; forcePair=false; }
