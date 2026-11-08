@@ -716,7 +716,11 @@ func (h *Hub) run(ctx context.Context) error {
 		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{h.cert}, MinVersion: tls.VersionTLS12},
 		ReadHeaderTimeout: 20 * time.Second,
 	}
-	go h.gd.loop(ctx)
+	gdDone := make(chan struct{})
+	go func() {
+		defer close(gdDone)
+		h.gd.loop(ctx)
+	}()
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -726,6 +730,13 @@ func (h *Hub) run(ctx context.Context) error {
 	h.log.Printf(T("Encluca hub %s in ascolto su https://%s (impronta certificato %s…)"), Version, h.listen, h.fingerprint[:16])
 	err := srv.ListenAndServeTLS("", "")
 	if errors.Is(err, http.ErrServerClosed) {
+		// arresto ordinato: il backup interrompe subito il file in corso e salva il suo stato
+		// (di solito in meno di un secondo). L'attesa è limitata a 3 secondi, così l'arresto
+		// dell'app o di TrueNAS non viene mai trattenuto: Docker ne concede 10.
+		select {
+		case <-gdDone:
+		case <-time.After(3 * time.Second):
+		}
 		return nil
 	}
 	return err

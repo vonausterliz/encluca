@@ -51,6 +51,7 @@
         <div class="stat"><span>Spazio occupato</span><b id="nSize">0</b></div>
         <div class="stat"><span>Dispositivi</span><b id="nDev">0</b></div>
         <div class="stat"><span>Cassaforte</span><b id="nVault">–</b></div>
+        <div class="stat"><span>Ultimo backup</span><b id="nBackup">–</b><small id="nBackupWhen" class="hint"></small></div>
       </div>
 
       <div class="card warn hidden" id="pwWarn">
@@ -171,6 +172,8 @@ const EN = {
  'Ultimo backup riuscito: ':'Last successful backup: ','Password cambiata.':'Password changed.','Copiato':'Copied','Impostazioni salvate.':'Settings saved.',
  'Backup avviato.':'Backup started.','Scollegare Google Drive? I file già caricati restano su Drive.':'Disconnect Google Drive? Files already uploaded stay on Drive.',
  '{d} di {n} file':'{d} of {n} files','Caricamento su Google Drive':'Uploading to Google Drive',
+ 'Ultimo backup':'Last backup','Ultimo backup completato: {d}.':'Last completed backup: {d}.','non attivo':'not active',
+ 'adesso':'just now','{n} min fa':'{n} min ago','{n} ore fa':'{n} hours ago','{n} giorni fa':'{n} days ago',
 };
 async function api(path, body, method){
   const opt = {headers:{'X-Encluca':'1','Content-Type':'application/json'}};
@@ -180,6 +183,9 @@ async function api(path, body, method){
   if(!r.ok) throw new Error(j.error || (t('errore') + ' ' + r.status)); return j;
 }
 const size = b => { const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024 && i<u.length-1){b/=1024;i++} return (i?b.toFixed(1):b)+' '+u[i]; };
+const ago = x => { const s = (Date.now() - new Date(x)) / 1000;
+  if(s < 90) return t('adesso'); if(s < 3600) return t('{n} min fa', {n: Math.round(s/60)});
+  if(s < 86400) return t('{n} ore fa', {n: Math.round(s/3600)}); return t('{n} giorni fa', {n: Math.round(s/86400)}); };
 const when = x => (!x || x.startsWith('0001')) ? t('mai') : new Date(x).toLocaleString(LOCALE());
 function progHTML(title, p){
   const pct = p.totalBytes > 0 ? 100*p.doneBytes/p.totalBytes : (p.total ? 100*p.done/p.total : 0);
@@ -223,6 +229,11 @@ async function refresh(){
   else { c=['ok',t('Attivo')]; st=t('Ultimo backup riuscito: ') + when(g.lastOK) + (g.lastInfo ? ' ('+g.lastInfo+')' : '') + '.'; }
   $('gdChip').className = 'chip ' + c[0]; $('gdChip').textContent = c[1];
   $('gdState').textContent = st; if(g.lastError && g.authorized && !g.running) $('gdState').append(g.lastError);
+  // ultimo backup completato: sempre visibile, anche durante un giro o dopo un errore
+  const okTime = g.lastOK && !g.lastOK.startsWith('0001') ? g.lastOK : '';
+  if(okTime && (g.running || g.lastError)) $('gdState').append(' ' + t('Ultimo backup completato: {d}.', {d: when(okTime)}));
+  $('nBackup').textContent = !g.authorized ? t('non attivo') : okTime ? ago(okTime) : t('mai');
+  $('nBackupWhen').textContent = okTime ? when(okTime) : '';
   $('gdSetup').classList.toggle('hidden', g.authorized);
   $('gdAuth').classList.toggle('hidden', g.authorized); $('gdRun').classList.toggle('hidden', !g.authorized); $('gdOff').classList.toggle('hidden', !g.authorized);
   if(!filled){ $('gdId').value = g.clientId || ''; $('gdFolder').value = g.folderName; $('gdRet').value = g.retentionDays; $('gdInt').value = g.intervalMin; filled = true; }

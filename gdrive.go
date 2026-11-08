@@ -45,6 +45,13 @@ type gdState struct {
 	ReadmeID   string             `json:"readmeId"`
 	Folders    map[string]string  `json:"folders"`
 	Files      map[string]*gdFile `json:"files"`
+	// Clean è vero se l'ultimo giro è terminato regolarmente. Se è falso (arresto brusco),
+	// alcuni file potrebbero essere stati caricati senza essere registrati: il giro
+	// successivo controlla su Drive prima di caricare, per non creare doppioni.
+	Clean bool `json:"clean"`
+	// ultimo backup completato, conservato anche dopo i riavvii
+	LastOK   time.Time `json:"lastOk,omitempty"`
+	LastInfo string    `json:"lastInfo,omitempty"`
 }
 
 type GDrive struct {
@@ -69,14 +76,20 @@ type GDrive struct {
 
 const (
 	gScope     = "https://www.googleapis.com/auth/drive.file"
+	folderMime = "application/vnd.google-apps.folder"
+)
+
+// Indirizzi di Google: variabili solo perché i test li puntano a un Drive finto.
+var (
 	gDriveAPI  = "https://www.googleapis.com/drive/v3"
 	gUploadAPI = "https://www.googleapis.com/upload/drive/v3"
-	folderMime = "application/vnd.google-apps.folder"
+	gTokenURL  = "https://oauth2.googleapis.com/token"
 )
 
 func newGDrive(h *Hub) *GDrive {
 	g := &GDrive{h: h, trigger: make(chan struct{}, 1), httpc: &http.Client{Timeout: 0}}
 	loadJSON(g.statePath(), &g.st)
+	g.lastOK, g.lastInfo = g.st.LastOK, g.st.LastInfo
 	if g.st.Folders == nil {
 		g.st.Folders = map[string]string{}
 	}
@@ -164,14 +177,20 @@ func (g *GDrive) runBackup(ctx context.Context, c GDriveConfig) {
 	g.mu.Lock()
 	g.running = false
 	g.prog = nil
-	if err != nil {
+	if err != nil && ctx.Err() != nil {
+		g.dirty = true
+		g.h.log.Printf(T("Backup Google Drive interrotto per l'arresto: riprenderà al riavvio"))
+	} else if err != nil {
 		g.lastErr = err.Error()
 		g.dirty = true // riprova al prossimo giro
 		g.h.log.Printf(T("Backup Google Drive fallito: %v"), err)
 	} else {
 		g.lastErr = ""
 		g.lastOK = time.Now()
+		g.st.LastOK = g.lastOK
 		g.lastInfo = fmt.Sprintf(T("%d caricati, %d spostati nelle versioni"), up, moved)
+		g.st.LastInfo = g.lastInfo
+		g.saveState()
 		if up+moved > 0 {
 			g.h.log.Printf(T("Backup Google Drive completato: %s"), g.lastInfo)
 		}
@@ -196,7 +215,7 @@ func (g *GDrive) token(ctx context.Context, c GDriveConfig) (string, error) {
 		Error       string `json:"error"`
 		Desc        string `json:"error_description"`
 	}
-	if err := g.postForm(ctx, "https://oauth2.googleapis.com/token", form, &out); err != nil && out.Error == "" {
+	if err := g.postForm(ctx, gTokenURL, form, &out); err != nil && out.Error == "" {
 		return "", err
 	}
 	if out.AccessToken == "" {
@@ -517,6 +536,12 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		g.st.MetaSHA = sha256Hex(meta)
 	}
 
+	// se il giro precedente non è terminato regolarmente, prima di caricare si controlla
+	// su Drive (vedi gdState.Clean); poi si segna il giro come in corso
+	recovering := !g.st.Clean && len(g.st.Files) > 0
+	g.st.Clean = false
+	g.saveState()
+
 	// istantanea dell'indice
 	type liveFile struct {
 		sha  string
@@ -575,6 +600,19 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		if parent, err = g.ensureFolder(ctx, c, g.st.VaultID, path.Dir(p)); err != nil {
 			return
 		}
+		if recovering {
+			// file caricati nel giro interrotto ma non registrati: si spostano nelle
+			// versioni invece di lasciare un doppione accanto alla copia nuova
+			var orphans []string
+			if orphans, err = g.findByName(ctx, c, path.Base(p), parent); err != nil {
+				return
+			}
+			for _, id := range orphans {
+				if err = g.moveToVersions(ctx, c, p, &gdFile{ID: id, Parent: parent}); err != nil {
+					return
+				}
+			}
+		}
 		local := filepath.Join(g.h.vaultDir(), filepath.FromSlash(p))
 		if id, err = g.upload(ctx, c, local, path.Base(p), parent); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
@@ -602,8 +640,29 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		moved++
 		advance(0)
 	}
-	err = g.pruneVersions(ctx, c)
+	if err = g.pruneVersions(ctx, c); err == nil {
+		g.st.Clean = true
+	}
 	return
+}
+
+// findByName elenca i file (non cartelle) chiamati name nella cartella parent.
+func (g *GDrive) findByName(ctx context.Context, c GDriveConfig, name, parent string) ([]string, error) {
+	esc := strings.NewReplacer(`\`, `\\`, `'`, `\'`)
+	q := url.QueryEscape(fmt.Sprintf("'%s' in parents and name = '%s' and trashed = false and mimeType != '%s'", esc.Replace(parent), esc.Replace(name), folderMime))
+	var out struct {
+		Files []struct {
+			ID string `json:"id"`
+		} `json:"files"`
+	}
+	if err := g.jsonCall(ctx, c, http.MethodGet, gDriveAPI+"/files?pageSize=100&fields=files(id)&q="+q, nil, &out); err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(out.Files))
+	for _, f := range out.Files {
+		ids = append(ids, f.ID)
+	}
+	return ids, nil
 }
 
 func (g *GDrive) pruneVersions(ctx context.Context, c GDriveConfig) error {
