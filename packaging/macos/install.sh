@@ -43,6 +43,13 @@ EOF
   mkdir -p "$HOME/Applications"
   printf '%s\n' "$WEBLOC" > "$HOME/Applications/Encluca.webloc"
   printf '%s\n' "$WEBLOC" > "$HOME/Desktop/Encluca.webloc"
+  # logo sui collegamenti (NSWorkspace via JavaScript for Automation)
+  if [ -f "$HERE/encluca.png" ]; then
+    cp "$HERE/encluca.png" "$APPDIR/encluca.png"
+    for f in "$HOME/Applications/Encluca.webloc" "$HOME/Desktop/Encluca.webloc"; do
+      osascript -l JavaScript -e "ObjC.import('AppKit'); \$.NSWorkspace.sharedWorkspace.setIconForFileOptions(\$.NSImage.alloc.initWithContentsOfFile('$APPDIR/encluca.png'), '$f', 0)" >/dev/null 2>&1 || true
+    done
+  fi
   sleep 1
   echo "Encluca installato e avviato. Interfaccia: http://127.0.0.1:8484"
   open http://127.0.0.1:8484 || true
@@ -50,7 +57,7 @@ EOF
 
 uninstall_agent() {
   launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
-  rm -f "$PLIST" "$BIN" "$HOME/Applications/Encluca.webloc" "$HOME/Desktop/Encluca.webloc"
+  rm -f "$PLIST" "$BIN" "$APPDIR/encluca.png" "$HOME/Applications/Encluca.webloc" "$HOME/Desktop/Encluca.webloc"
   echo "Encluca rimosso. I dati cifrati restano in \"$APPDIR\"."
 }
 

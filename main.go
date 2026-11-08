@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"embed"
+	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -18,10 +19,16 @@ import (
 	"time"
 )
 
-var Version = "0.1.3"
+var Version = "0.1.4"
 
 //go:embed web/*.html web/*.css web/*.js
 var webFS embed.FS
+
+//go:embed assets/logo.svg
+var logoSVG []byte
+
+// logoURI è il logo come data URI, usato per favicon e marchio nelle pagine.
+var logoURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(logoSVG)
 
 // serveUI invia la pagina con tema (web/theme.css) e traduzioni (web/i18n.js) inclusi al posto dei segnaposto.
 func serveUI(w http.ResponseWriter, name string) {
@@ -34,6 +41,7 @@ func serveUI(w http.ResponseWriter, name string) {
 	}
 	b = bytes.Replace(b, []byte("/*THEME*/"), css, 1)
 	b = bytes.Replace(b, []byte("/*I18N*/"), js, 1)
+	b = bytes.ReplaceAll(b, []byte("{{LOGO}}"), []byte(logoURI))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b)

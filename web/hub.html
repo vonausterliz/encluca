@@ -3,19 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="{{LOGO}}">
 <title>encluca · NAS</title>
 <style>
 /*THEME*/
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.4 9.3 8 11 4.6-1.7 8-6 8-11V5z"/><rect x="9" y="10.5" width="6" height="5" rx="1"/><path d="M10 10.5V9a2 2 0 0 1 4 0v1.5"/></symbol>
-</svg>
 
 <div id="loginBox" class="login hidden">
   <div class="card">
-    <div class="brand"><svg><use href="#logo"/></svg>encluca</div>
+    <div class="brand"><img class="mark" src="{{LOGO}}" alt="">encluca</div>
     <div class="card-body">
       <p style="text-align:center;color:var(--mute)">Amministrazione dell'hub sul NAS</p>
       <label for="loginPw">Password amministratore</label>
@@ -29,7 +27,7 @@
 
 <div id="app" class="hidden">
   <header class="topbar">
-    <a class="brand" href="#panoramica"><svg><use href="#logo"/></svg>encluca <small>hub</small></a>
+    <a class="brand" href="#panoramica"><img class="mark" src="{{LOGO}}" alt="">encluca <small>hub</small></a>
     <span class="spacer"></span>
     <span class="meta" id="ver"></span>
     <button class="ghost small" id="logoutBtn">Esci</button>

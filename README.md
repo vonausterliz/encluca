@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo.svg" width="112" alt="encluca"></p>
+
 # encluca
 
 **Una cartella personale cifrata, sincronizzata tra i tuoi computer tramite il NAS, con backup cifrato su Google Drive.**

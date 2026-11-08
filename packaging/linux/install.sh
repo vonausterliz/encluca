@@ -13,6 +13,10 @@ client_install() {
   [ -x "$BIN_SRC" ] || { echo "Binario non trovato: $BIN_SRC"; exit 1; }
   if [ "$(id -u)" = 0 ]; then echo "Esegui il client come utente normale, non come root."; exit 1; fi
   install -Dm755 "$BIN_SRC" "$HOME/.local/bin/encluca"
+  # logo per il menu delle applicazioni e il desktop
+  [ -f "$HERE/encluca.svg" ] && install -Dm644 "$HERE/encluca.svg" "$HOME/.local/share/icons/hicolor/scalable/apps/encluca.svg"
+  [ -f "$HERE/encluca.png" ] && install -Dm644 "$HERE/encluca.png" "$HOME/.local/share/icons/hicolor/256x256/apps/encluca.png"
+  gtk-update-icon-cache -q "$HOME/.local/share/icons/hicolor" 2>/dev/null || true
   mkdir -p "$HOME/.config/systemd/user"
   cat > "$HOME/.config/systemd/user/encluca.service" <<EOF
 [Unit]
@@ -40,7 +44,7 @@ Type=Application
 Name=Encluca
 Comment=Apri o chiudi la cassaforte cifrata
 Exec=xdg-open http://127.0.0.1:8484
-Icon=folder-locked
+Icon=encluca
 Terminal=false
 Categories=Utility;Security;
 EOF
@@ -63,7 +67,9 @@ EOF
 client_uninstall() {
   systemctl --user disable --now encluca.service 2>/dev/null || true
   rm -f "$HOME/.config/systemd/user/encluca.service" "$HOME/.local/bin/encluca" \
-        "$HOME/.local/share/applications/encluca.desktop"
+        "$HOME/.local/share/applications/encluca.desktop" \
+        "$HOME/.local/share/icons/hicolor/scalable/apps/encluca.svg" \
+        "$HOME/.local/share/icons/hicolor/256x256/apps/encluca.png"
   DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
   rm -f "$DESKTOP_DIR/Encluca.desktop"
   systemctl --user daemon-reload

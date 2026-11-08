@@ -14,6 +14,11 @@ build() { # os arch packaging-dir
   CGO_ENABLED=0 GOOS=$os GOARCH=$arch go build -trimpath -ldflags "$ldflags" -o "$out/encluca$ext" .
   cp packaging/$pkg/* "$out/"
   cp LEGGIMI.md README.md "$out/"
+  case $os in # logo per i collegamenti
+    linux) cp assets/logo.svg "$out/encluca.svg"; cp assets/encluca-256.png "$out/encluca.png" ;;
+    darwin) cp assets/encluca-512.png "$out/encluca.png" ;;
+    windows) cp assets/encluca.ico "$out/encluca.ico" ;;
+  esac
   [ "$os" = linux ] && cp docs/INSTALLA-TRUENAS.md "$out/"
   if [ "$os" = windows ]; then
     (cd dist && python3 -c "import shutil,sys; shutil.make_archive(sys.argv[1], 'zip', '.', sys.argv[1])" "$name")

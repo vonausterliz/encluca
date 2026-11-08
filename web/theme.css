@@ -17,7 +17,7 @@ code{background:var(--alt1);padding:1px 6px;border-radius:var(--r);font:12.5px u
 /* barra superiore */
 .topbar{position:sticky;top:0;z-index:5;height:var(--top);background:var(--topbar);color:var(--fg1);display:flex;align-items:center;gap:14px;padding:0 16px;box-shadow:0 1px 0 #000}
 .brand{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;color:var(--fg1);text-decoration:none;letter-spacing:.01em}
-.brand svg{width:26px;height:26px;color:var(--primary)}
+.brand .mark{width:28px;height:28px;display:block}
 .brand small{font-size:12px;font-weight:500;color:var(--mute);border:1px solid var(--alt2);border-radius:var(--r);padding:1px 6px}
 .topbar .spacer{flex:1}
 .topbar .meta{color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -104,7 +104,7 @@ ol{margin:0 0 12px;padding-left:20px;max-width:80ch} ol li{margin:4px 0}
 .login{min-height:100vh;display:grid;place-items:center;padding:16px;background:radial-gradient(circle at 50% 30%,#2A2A2A,#151515 70%)}
 .login .card{width:100%;max-width:400px}
 .login .brand{justify-content:center;font-size:24px;padding:28px 0 4px}
-.login .brand svg{width:34px;height:34px}
+.login .brand .mark{width:40px;height:40px}
 
 @media (max-width:860px){
   .layout{grid-template-columns:1fr}

@@ -21,7 +21,7 @@ function Stop-Encluca {
 if ($Uninstall) {
   Stop-Encluca
   Unregister-ScheduledTask -TaskName $Task -Confirm:$false -ErrorAction SilentlyContinue
-  Remove-Item $Exe, (Join-Path $Desktop 'Encluca.url'), $StartMenu -ErrorAction SilentlyContinue
+  Remove-Item $Exe, (Join-Path $AppDir 'encluca.ico'), (Join-Path $Desktop 'Encluca.url'), $StartMenu -ErrorAction SilentlyContinue
   Write-Host "Encluca rimosso. I dati cifrati restano in $AppDir."
   exit 0
 }
@@ -43,7 +43,10 @@ Register-ScheduledTask -TaskName $Task -Action $action -Trigger $trigger -Settin
   -Description 'Encluca - cassaforte cifrata sincronizzata' -Force | Out-Null
 Start-ScheduledTask -TaskName $Task
 
-$url = "[InternetShortcut]`r`nURL=http://127.0.0.1:8484`r`nIconFile=%SystemRoot%\System32\imageres.dll`r`nIconIndex=54`r`n"
+$Ico = Join-Path $AppDir 'encluca.ico'
+$IcoSrc = Join-Path $PSScriptRoot 'encluca.ico'
+if (Test-Path $IcoSrc) { Copy-Item $IcoSrc $Ico -Force }
+$url = "[InternetShortcut]`r`nURL=http://127.0.0.1:8484`r`nIconFile=$Ico`r`nIconIndex=0`r`n"
 Set-Content -Path (Join-Path $Desktop 'Encluca.url') -Value $url -Encoding ASCII
 Set-Content -Path $StartMenu -Value $url -Encoding ASCII
 
