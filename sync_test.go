@@ -299,3 +299,40 @@ func TestUnreadableDirIsNotDeletion(t *testing.T) {
 		t.Error("chiusa con una cartella illeggibile")
 	}
 }
+
+func TestOwnDeleteEchoAndSyncNow(t *testing.T) {
+	env := newTestEnv(t)
+	pc := env.newClient("PC1")
+	if err := pc.CreateVault("una password lunga e sicura"); err != nil {
+		t.Fatal(err)
+	}
+	writeWork(t, pc, "temp.txt", "x")
+	waitFor(t, "upload", func() bool { return pendingCount(pc) == 0 && env.hubFiles() == 1 })
+	os.Remove(filepath.Join(pc.cfg.WorkDir, "temp.txt"))
+	waitFor(t, "cancellazione inviata", func() bool {
+		env.hub.mu.Lock()
+		defer env.hub.mu.Unlock()
+		for _, e := range env.hub.idx.Entries {
+			if e.Del {
+				return pendingCount(pc) == 0
+			}
+		}
+		return false
+	})
+	time.Sleep(2 * time.Second) // lascia arrivare l'eco dal pull
+	for _, l := range pc.log.Lines() {
+		if strings.Contains(l, "da un altro dispositivo") {
+			t.Fatalf("la propria cancellazione è registrata come altrui: %s", l)
+		}
+	}
+	r, err := pc.SyncNow()
+	if err != nil || r["online"] != true || r["pending"] != 0 {
+		t.Fatalf("SyncNow con NAS acceso: %v %v", r, err)
+	}
+	env.down.Store(true)
+	r, _ = pc.SyncNow()
+	if r["online"] != false {
+		t.Fatalf("SyncNow con NAS spento risulta online: %v", r)
+	}
+	env.down.Store(false)
+}

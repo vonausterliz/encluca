@@ -22,7 +22,9 @@ func TestSuggestName(t *testing.T) {
 		t.Fatalf("taglio errato: %q", got)
 	}
 	// nome occupato (anche con maiuscole diverse): si aggiunge un numero
-	taken := func(n string) bool { return strings.EqualFold(n, "Il cavaliere inesistente _ presentazione dell'autore -- Italo Calvino -- Oscar opere di Italo Calvino, 2000 -- A_ Mondadori.epub") }
+	taken := func(n string) bool {
+		return strings.EqualFold(n, "Il cavaliere inesistente _ presentazione dell'autore -- Italo Calvino -- Oscar opere di Italo Calvino, 2000 -- A_ Mondadori.epub")
+	}
 	got = suggestName(calvino, fits, taken)
 	if taken(got) || !fits(got) || !strings.Contains(got, "(2)") {
 		t.Fatalf("collisione non evitata: %q", got)

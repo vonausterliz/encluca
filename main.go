@@ -191,14 +191,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	mux.HandleFunc("/api/rename", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.Rename(b.Path, b.Name) }))
 	mux.HandleFunc("/api/confirm-deletes", post(func(r *http.Request) (any, error) { c.ConfirmDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
-	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) {
-		c.kick()
-		select {
-		case c.pullReset <- struct{}{}:
-		default:
-		}
-		return nil, nil
-	}))
+	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)

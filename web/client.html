@@ -256,7 +256,18 @@ $('closeBtn').onclick = async () => { busy($('closeBtn'),true); $('doorMsg').tex
   try{ await api('/api/close',{}); $('doorMsg').textContent='Chiusa. La cartella in chiaro è stata cancellata.'; }
   catch(e){ $('doorMsg').textContent=e.message; } busy($('closeBtn'),false); refresh(); };
 $('folderBtn').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
-$('syncBtn').onclick = () => api('/api/sync',{}).then(refresh);
+$('syncBtn').onclick = async () => {
+  const btn = $('syncBtn'); btn.disabled = true; btn.textContent = 'Sincronizzazione…';
+  let msg;
+  try{
+    const r = await api('/api/sync',{});
+    if(!r.online) msg = 'NAS non raggiungibile: modifiche in coda';
+    else if(r.pending) msg = r.pending + ' file ancora in invio';
+    else msg = 'Allineato alle ' + new Date(r.lastSync).toLocaleTimeString('it-IT');
+  }catch(e){ msg = e.message; }
+  btn.textContent = msg; refresh();
+  setTimeout(() => { btn.textContent = 'Sincronizza ora'; btn.disabled = false; }, 4000);
+};
 $('massBtn').onclick = () => api('/api/confirm-deletes',{}).then(refresh);
 $('workBtn').onclick = () => api('/api/workdir',{Dir:$('workDir').value}).then(()=>$('setMsg').textContent='Salvato.').catch(e=>$('setMsg').textContent=e.message);
 $('repairBtn').onclick = () => { forcePair = true; render(); $('pairCode').focus(); };

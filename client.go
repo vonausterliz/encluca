@@ -682,6 +682,13 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 		}
 		st = c.st.Files[e.Path]
 	}
+	if e.Del && st != nil && (st.Del || st.Pending == "del") {
+		// già cancellato anche qui: di solito è la nostra stessa cancellazione che torna dal NAS
+		st.Rev, st.Pending, st.Del, st.Conflict = e.Rev, "", true, 0
+		c.saveState()
+		c.mu.Unlock()
+		return nil
+	}
 	if st != nil && st.Pending == "del" {
 		st.Pending = "" // la modifica altrui prevale sulla nostra cancellazione
 	}
@@ -1328,4 +1335,33 @@ func (c *Client) run(ctx context.Context) {
 		c.log.Printf("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi")
 	}
 	c.mu.Unlock()
+}
+
+// SyncNow invia subito la coda e verifica il contatto con il NAS, restituendo l'esito
+// (per il pulsante "Sincronizza ora"). La ricezione continua in parallelo nel pullLoop.
+func (c *Client) SyncNow() (map[string]any, error) {
+	if !c.paired() {
+		return nil, errors.New("questo computer non è collegato a un NAS")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	c.pushOnce(ctx)
+	select {
+	case c.pullReset <- struct{}{}:
+	default:
+	}
+	var ping map[string]any
+	err := c.getJSON(ctx, "/api/v1/ping", nil, &ping)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	pending := 0
+	for _, st := range c.st.Files {
+		if st.Pending != "" {
+			pending++
+		}
+	}
+	if err == nil && pending == 0 {
+		c.lastSync = time.Now()
+	}
+	return map[string]any{"online": err == nil, "pending": pending, "lastSync": c.lastSync}, nil
 }
