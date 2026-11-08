@@ -29,10 +29,12 @@ Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio
 
 ### 1. NAS (TrueNAS Community Edition)
 
-1. Crea un dataset, ad esempio `/mnt/tank/apps/cassasync`, con le sottocartelle `bin` e `data`.
+1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/cassasync`, con le sottocartelle `bin` e `data`.
 2. Copia in `bin` il file `cassasync` del pacchetto **linux-amd64**.
-3. Imposta come proprietario delle due cartelle l'utente `apps` (uid 568). Dalla shell di TrueNAS: `chown -R 568:568 /mnt/tank/apps/cassasync`.
+3. Assegna all'utente `apps` (uid 568) **solo** le cartelle nuove, senza `-R`:
+   `chown 568:568 /mnt/tank/cassasync/bin /mnt/tank/cassasync/data`
 4. Vai in **Apps → Discover Apps → ⋮ → Install via YAML** e incolla `docker-compose.yaml`, correggendo i percorsi `/mnt/tank/...`.
+   Se la porta 8443 è già usata da un'altra app, cambia solo il numero a sinistra (es. `"18443:8443"`).
 5. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
 
 > In alternativa, su qualunque server Linux: `./install.sh hub`.
@@ -115,7 +117,7 @@ Per il backup su Drive, usa come `remote` un remote Google Drive di rclone, ad e
 | Dati client macOS | `~/Library/Application Support/CassaSync/` |
 | Dati client Windows | `%LOCALAPPDATA%\CassaSync\` |
 | Registro client | `cassasync.log` nella cartella dati |
-| Dati hub | `/data` nel container (= `/mnt/tank/apps/cassasync/data`) |
+| Dati hub | `/data` nel container (= `/mnt/tank/cassasync/data`) |
 
 ## Sviluppo
 
