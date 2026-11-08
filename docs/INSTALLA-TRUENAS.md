@@ -12,12 +12,13 @@ Questa guida installa l'hub senza toccare nulla di ciò che hai già sul NAS.
 Il container:
 - gira come utente `apps` (uid 568), non come root;
 - ha il sistema di file in sola lettura e non può acquisire privilegi;
-- vede **solo** le due cartelle del suo dataset: `bin` in sola lettura e `data`.
+- vede **solo** la cartella `data` del suo dataset;
+- usa l'immagine ufficiale `ghcr.io/vonausterliz/encluca`, compilata automaticamente dal codice pubblico su GitHub.
 
 Per tornare indietro basta eliminare l'app e il dataset: vedi [Disinstallare](#disinstallare).
 
 > ⚠️ **`NOMEPOOL` è un segnaposto: va sostituito ovunque**, sia nei comandi della Shell sia nel YAML, con il nome reale del tuo pool (vedi 0.1). Lo stesso vale per `IP-DEL-NAS`.
-> Se nel YAML resta `NOMEPOOL`, Docker crea da solo una cartella vuota `/mnt/NOMEPOOL` e l'app si ferma con `stat /app/encluca: no such file or directory`. Vedi [Problemi comuni](#problemi-comuni).
+> Se nel YAML resta `NOMEPOOL`, Docker crea da solo una cartella vuota `/mnt/NOMEPOOL` e l'app non trova i suoi dati. Vedi [Problemi comuni](#problemi-comuni).
 
 ---
 
@@ -64,7 +65,7 @@ Ora esiste `/mnt/NOMEPOOL/encluca`.
 
 ---
 
-## Passo 2 – Scarica il programma sul NAS
+## Passo 2 – Prepara la cartella dati
 
 In *System → Shell* esegui un comando alla volta:
 
@@ -72,42 +73,17 @@ In *System → Shell* esegui un comando alla volta:
 P=/mnt/NOMEPOOL/encluca
 ```
 ```
-sudo mkdir "$P/bin" "$P/data"
+sudo mkdir "$P/data"
 ```
-Imposta la versione da installare (l'ultima è indicata nella [pagina delle release](https://github.com/vonausterliz/encluca/releases/latest)):
+`sudo` chiede la password del tuo utente amministratore. Assegna all'utente `apps` **solo** la cartella nuova, volutamente senza `-R`:
 ```
-V=0.1.2
-```
-```
-cd /tmp
-curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/encluca-$V-linux-amd64.tar.gz
-curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/SHA256SUMS.txt
-```
-Verifica che il file sia integro:
-```
-sha256sum -c --ignore-missing SHA256SUMS.txt
-```
-La risposta **deve** essere `encluca-…-linux-amd64.tar.gz: OK`. Se è diversa, fermati.
-
-```
-tar xzf encluca-$V-linux-amd64.tar.gz
-sudo cp encluca-$V-linux-amd64/encluca "$P/bin/"
-sudo chmod 755 "$P/bin/encluca"
-```
-Assegna all'utente `apps` **solo** le due cartelle nuove. Il comando è volutamente senza `-R`:
-```
-sudo chown 568:568 "$P/bin" "$P/data"
+sudo chown 568:568 "$P/data"
 ```
 Controlla il risultato:
 ```
-ls -ln "$P" "$P/bin"
+ls -ln "$P"
 ```
-Devi vedere `bin` e `data` con proprietario `568 568`, e il file `encluca` con permessi `-rwxr-xr-x`.
-
-Pulisci i file temporanei:
-```
-rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
-```
+Devi vedere `data` con proprietario `568 568`.
 
 ---
 
@@ -116,17 +92,18 @@ rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
 1. Vai in *Apps → Discover Apps*.
 2. Premi il menu **⋮**, in alto a destra accanto a *Custom App*, e scegli **Install via YAML**.
 3. **Name**: `encluca`, solo lettere minuscole, numeri e trattini.
-4. Nel riquadro **Custom Config** incolla il testo seguente, sostituendo `NOMEPOOL` nelle due righe `volumes`:
+4. Nel riquadro **Custom Config** incolla il testo seguente, sostituendo `NOMEPOOL` nella riga `volumes`:
 
 ```yaml
 services:
   encluca-hub:
-    image: alpine:3.20
+    image: ghcr.io/vonausterliz/encluca:latest
+    pull_policy: always
     container_name: encluca-hub
-    command: ["/app/encluca", "hub", "--data", "/data", "--listen", ":8443"]
     user: "568:568"
+    environment:
+      TZ: Europe/Rome
     volumes:
-      - /mnt/NOMEPOOL/encluca/bin:/app:ro
       - /mnt/NOMEPOOL/encluca/data:/data
     ports:
       - "8443:8443"
@@ -137,8 +114,10 @@ services:
 ```
 Se al passo 0.3 la porta era occupata, la riga delle porte diventa `- "18443:8443"`.
 
-5. Premi **Save**. TrueNAS scarica l'immagine `alpine:3.20`, di pochi MB, e avvia il container.
+5. Premi **Save**. TrueNAS scarica l'immagine di encluca (circa 15 MB) e avvia il container.
 6. In *Apps → Installed*, dopo qualche secondo, `encluca` deve risultare **Running**.
+
+`pull_policy: always` fa sì che a ogni avvio TrueNAS controlli se esiste una versione più recente: è quello che rende l'aggiornamento un solo clic.
 
 ---
 
@@ -170,33 +149,32 @@ L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGG
 
 | Sintomo | Causa probabile | Soluzione |
 |---|---|---|
-| L'app resta in *Deploying* o va in *Crashed*, e nei log c'è `permission denied` | permessi delle cartelle | ripeti il `chown` del passo 2 e controlla con `ls -ln` |
+| L'app resta in *Deploying* o va in *Crashed*, e nei log c'è `permission denied` | permessi della cartella `data` | ripeti il `chown` del passo 2 e controlla con `ls -ln` |
+| Errore nello scaricare `ghcr.io/vonausterliz/encluca` | il NAS non raggiunge internet o GitHub | controlla DNS e gateway in *Network*; riprova con **Edit → Save** |
 | Nei log: `address already in use` | porta 8443 occupata | *Apps → encluca → Edit*, cambia la porta in `"18443:8443"` |
-| `stat /app/encluca: no such file or directory` | nel YAML è rimasto `NOMEPOOL`, il percorso è sbagliato o il binario non è stato copiato | elimina l'app, rimuovi la cartella creata per errore con `sudo rmdir` (si rifiuta se non è vuota), correggi il percorso e reinstalla |
+| L'app si ferma con `permission denied` su `/data` oppure compare una cartella vuota `/mnt/NOMEPOOL` | nel YAML è rimasto `NOMEPOOL` o il percorso è sbagliato | elimina l'app, rimuovi la cartella creata per errore con `sudo rmdir` (si rifiuta se non è vuota), correggi il percorso e reinstalla |
 | Il browser non si connette | indirizzo o porta sbagliati | usa `https://` (non `http://`) e la porta scelta |
 
 ## Aggiornare a una nuova versione
 
-Nella Shell di TrueNAS, sostituendo `NOMEPOOL` e indicando la nuova versione:
-```
-P=/mnt/NOMEPOOL/encluca
-V=0.1.2
-cd /tmp
-curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/encluca-$V-linux-amd64.tar.gz
-curl -fLO https://github.com/vonausterliz/encluca/releases/download/v$V/SHA256SUMS.txt
-sha256sum -c --ignore-missing SHA256SUMS.txt
-```
-Solo se la risposta è `OK`:
-```
-tar xzf encluca-$V-linux-amd64.tar.gz
-sudo cp encluca-$V-linux-amd64/encluca "$P/bin/encluca.new"
-sudo chmod 755 "$P/bin/encluca.new"
-sudo mv -f "$P/bin/encluca.new" "$P/bin/encluca"
-rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
-```
-Il programma è in esecuzione, quindi non si può sovrascrivere direttamente (`Text file busy`): si copia con un nome provvisorio e lo si rinomina. Il container continua con la vecchia versione fino al riavvio.
+*Apps → encluca → **Restart***. Al riavvio TrueNAS scarica l'ultima versione dell'immagine. Ricarica la pagina dell'hub e controlla il numero di versione in alto a destra.
 
-Poi in *Apps → encluca* premi **Restart**. Viene sostituito solo `bin/encluca`: `data`, cioè i file cifrati, i dispositivi e la password, resta intatto.
+Se la versione non cambia, vai in *Apps → encluca → **Edit*** e premi **Save** senza modificare nulla: TrueNAS ricrea il container scaricando l'immagine.
+
+La cartella `data`, cioè file cifrati, dispositivi, password e collegamento a Google Drive, resta intatta. Durante il riavvio i PC mettono le modifiche in coda e le inviano appena l'hub torna disponibile.
+
+## Passare dalla vecchia installazione (cartella `bin`)
+
+Se hai installato l'hub copiando il file `encluca` nella cartella `bin` (versioni fino alla 0.1.3), passa all'immagine una volta sola:
+
+1. *Apps → encluca → **Edit***.
+2. Sostituisci il testo YAML con quello del [passo 3](#passo-3--installa-lapp), mantenendo il tuo percorso `/mnt/NOMEPOOL/encluca/data`.
+3. Premi **Save**.
+4. Ricarica la pagina dell'hub: dispositivi, password e Google Drive sono quelli di prima.
+5. Facoltativo, quando hai verificato che tutto funziona: la cartella `bin` non serve più.
+   ```
+   sudo rm -r /mnt/NOMEPOOL/encluca/bin
+   ```
 
 ## Disinstallare
 

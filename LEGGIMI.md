@@ -31,13 +31,13 @@ Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio
 
 > Guida dettagliata passo per passo, con controlli e disinstallazione: [docs/INSTALLA-TRUENAS.md](docs/INSTALLA-TRUENAS.md).
 
-1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/encluca`, con le sottocartelle `bin` e `data`.
-2. Copia in `bin` il file `encluca` del pacchetto **linux-amd64**.
-3. Assegna all'utente `apps` (uid 568) **solo** le cartelle nuove, senza `-R`:
-   `chown 568:568 /mnt/tank/encluca/bin /mnt/tank/encluca/data`
-4. Vai in **Apps → Discover Apps → ⋮ → Install via YAML** e incolla `docker-compose.yaml`, correggendo i percorsi `/mnt/tank/...`.
+1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/encluca`, con la sottocartella `data`.
+2. Assegnala all'utente `apps` (uid 568), senza `-R`: `chown 568:568 /mnt/tank/encluca/data`
+3. Vai in **Apps → Discover Apps → ⋮ → Install via YAML** e incolla `packaging/truenas/docker-compose.yaml`, correggendo il percorso `/mnt/tank/...`.
    Se la porta 8443 è già usata da un'altra app, cambia solo il numero a sinistra (es. `"18443:8443"`).
-5. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
+4. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
+
+**Aggiornare:** *Apps → encluca → Restart*. L'app usa l'immagine `ghcr.io/vonausterliz/encluca:latest` e a ogni avvio scarica l'ultima versione.
 
 > In alternativa, su qualunque server Linux: `./install.sh hub`.
 

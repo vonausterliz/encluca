@@ -27,7 +27,7 @@ Scarica il pacchetto per il tuo sistema dalla [pagina delle release](https://git
 
 | Dove | Pacchetto | Guida |
 |---|---|---|
-| NAS TrueNAS CE | `encluca-…-linux-amd64.tar.gz` | [docs/INSTALLA-TRUENAS.md](docs/INSTALLA-TRUENAS.md) |
+| NAS TrueNAS CE | immagine `ghcr.io/vonausterliz/encluca` (aggiornamento: *Restart*) | [docs/INSTALLA-TRUENAS.md](docs/INSTALLA-TRUENAS.md) |
 | PC Linux | `encluca-…-linux-amd64.tar.gz` | `./install.sh` |
 | Mac Apple Silicon / Intel | `encluca-…-darwin-arm64` / `-darwin-amd64` | `./install.sh` |
 | Windows | `encluca-…-windows-amd64.zip` | `install.ps1` |

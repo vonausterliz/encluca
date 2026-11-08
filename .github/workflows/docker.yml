@@ -1,0 +1,53 @@
+# Pubblica l'immagine dell'hub su ghcr.io a ogni release (o a mano, indicando il tag).
+name: Immagine Docker
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag della release da pubblicare (es. v0.1.3)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Scelta del tag
+        id: tag
+        run: |
+          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+      # sorgente della release richiesta…
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          path: src
+      # …e Dockerfile aggiornato (le release più vecchie potrebbero non averlo)
+      - uses: actions/checkout@v4
+        with:
+          path: ci
+          sparse-checkout: Dockerfile
+          sparse-checkout-cone-mode: false
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: src
+          file: ci/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/vonausterliz/encluca:${{ steps.tag.outputs.version }}
+            ghcr.io/vonausterliz/encluca:latest

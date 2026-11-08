@@ -1,19 +1,20 @@
-# Encluca hub su TrueNAS Community Edition
-# Apps -> Discover Apps -> (menu ⋮) Install via YAML -> incolla questo file.
+# encluca hub su TrueNAS Community Edition
+# Apps -> Discover Apps -> (menu ⋮) Install via YAML -> incolla questo testo.
 #
-# Prima:
-#   1. crea un NUOVO dataset, es. /mnt/tank/encluca, con le sottocartelle "bin" e "data"
-#   2. copia in "bin" il file encluca del pacchetto linux-amd64
-#   3. chown 568:568 /mnt/tank/encluca/bin /mnt/tank/encluca/data  (senza -R)
+# Prima: crea un NUOVO dataset (es. /mnt/tank/encluca) con la sottocartella "data"
+#        e assegnala all'utente apps:  sudo chown 568:568 /mnt/tank/encluca/data
 # Sostituisci /mnt/tank con il percorso del tuo pool.
+#
+# Aggiornare: Apps -> encluca -> Restart (pull_policy: always scarica l'ultima versione).
 services:
   encluca-hub:
-    image: alpine:3.20
+    image: ghcr.io/vonausterliz/encluca:latest
+    pull_policy: always
     container_name: encluca-hub
-    command: ["/app/encluca", "hub", "--data", "/data", "--listen", ":8443"]
     user: "568:568"
+    environment:
+      TZ: Europe/Rome
     volumes:
-      - /mnt/tank/encluca/bin:/app:ro
       - /mnt/tank/encluca/data:/data
     ports:
       - "8443:8443"
