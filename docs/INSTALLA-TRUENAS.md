@@ -189,9 +189,13 @@ sha256sum -c --ignore-missing SHA256SUMS.txt
 Solo se la risposta è `OK`:
 ```
 tar xzf encluca-$V-linux-amd64.tar.gz
-sudo cp encluca-$V-linux-amd64/encluca "$P/bin/encluca"
+sudo cp encluca-$V-linux-amd64/encluca "$P/bin/encluca.new"
+sudo chmod 755 "$P/bin/encluca.new"
+sudo mv -f "$P/bin/encluca.new" "$P/bin/encluca"
 rm -rf /tmp/encluca-$V-linux-amd64* /tmp/SHA256SUMS.txt
 ```
+Il programma è in esecuzione, quindi non si può sovrascrivere direttamente (`Text file busy`): si copia con un nome provvisorio e lo si rinomina. Il container continua con la vecchia versione fino al riavvio.
+
 Poi in *Apps → encluca* premi **Restart**. Viene sostituito solo `bin/encluca`: `data`, cioè i file cifrati, i dispositivi e la password, resta intatto.
 
 ## Disinstallare
