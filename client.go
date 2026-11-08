@@ -31,7 +31,7 @@ import (
 const (
 	readmeName   = "LEGGIMI - CASSAFORTE APERTA.txt"
 	tmpPrefix    = ".encluca-tmp-"
-	checkPlain   = "encluca-password-ok"
+	checkPlain   = rcrypt.CheckPlain
 	scanInterval = 2 * time.Second
 )
 

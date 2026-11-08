@@ -129,3 +129,16 @@ button.with-ic{display:inline-flex;align-items:center;gap:8px}
 .prog .track{height:6px;border-radius:3px;background:var(--alt1);overflow:hidden}
 .prog .fill{height:100%;background:var(--primary);border-radius:3px;transition:width .4s}
 .stat small{display:block;margin-top:2px}
+
+/* esplorazione file */
+label.check{display:flex;align-items:center;gap:10px;color:var(--fg1);cursor:pointer}
+label.check input{width:18px;height:18px;accent-color:var(--primary)}
+.br-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;color:var(--mute)}
+button.linkbtn{background:none;border:0;padding:2px 4px;min-height:0;color:var(--primary);font-weight:500}
+button.linkbtn:hover{background:none;text-decoration:underline}
+.br-table .fname{display:inline-flex;align-items:center;gap:10px;color:var(--fg1);word-break:break-all}
+.br-table .fname svg{width:20px;height:20px;flex:none;color:var(--mute)}
+.br-table tr.br-dir{cursor:pointer}
+.br-table tr.br-dir .fname svg{color:var(--primary)}
+.br-table tr.br-dir:hover td{background:var(--alt1)}
+.br-table td:nth-child(2),.br-table td:nth-child(3){color:var(--fg2);white-space:nowrap;font-variant-numeric:tabular-nums}

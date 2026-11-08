@@ -129,6 +129,9 @@ var enMessages = map[string]string{
 
 	// Google Drive
 	"Backup Google Drive interrotto per l'arresto: riprenderà al riavvio": "Google Drive backup interrupted by shutdown: it will resume on restart",
+	"funzione disattivata: attivala in Impostazioni":                      "feature disabled: enable it in Settings",
+	"Esplorazione della cassaforte dal NAS attivata":                      "Vault browsing from the NAS enabled",
+	"Esplorazione della cassaforte dal NAS disattivata":                   "Vault browsing from the NAS disabled",
 	"Backup Google Drive fallito: %v":                                     "Google Drive backup failed: %v",
 	"Backup Google Drive completato: %s":                                  "Google Drive backup completed: %s",
 	"%d caricati, %d spostati nelle versioni":                             "%d uploaded, %d moved to versions",
@@ -139,8 +142,8 @@ var enMessages = map[string]string{
 	"Drive non ha restituito l'URL di upload":                             "Drive did not return the upload URL",
 	"Cartella di backup non più presente su Drive: la ricreo":             "Backup folder no longer on Drive: recreating it",
 	"Versioni del %s eliminate (più vecchie di %d giorni)":                "Versions from %s deleted (older than %d days)",
-	"dati non validi":                                                     "invalid data",
-	"inserisci prima Client ID e Client Secret":                           "enter Client ID and Client Secret first",
-	"Google Drive non è ancora autorizzato":                               "Google Drive is not authorized yet",
-	"Google Drive scollegato":                                             "Google Drive disconnected",
+	"dati non validi": "invalid data",
+	"inserisci prima Client ID e Client Secret": "enter Client ID and Client Secret first",
+	"Google Drive non è ancora autorizzato":     "Google Drive is not authorized yet",
+	"Google Drive scollegato":                   "Google Drive disconnected",
 }

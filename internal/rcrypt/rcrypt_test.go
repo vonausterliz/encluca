@@ -118,3 +118,14 @@ func TestRcloneCompat(t *testing.T) {
 		t.Fatalf("rclone ha letto %q, atteso %q", got, ours)
 	}
 }
+
+func TestDecryptedSize(t *testing.T) {
+	for _, n := range []int64{0, 1, 15, 16, 65535, 65536, 65537, 131072, 1 << 20, 5*65536 + 123} {
+		if got := DecryptedSize(EncryptedSize(n)); got != n {
+			t.Fatalf("DecryptedSize(EncryptedSize(%d)) = %d", n, got)
+		}
+	}
+	if DecryptedSize(10) != -1 {
+		t.Fatal("dimensione non valida accettata")
+	}
+}

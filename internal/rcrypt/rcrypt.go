@@ -265,6 +265,28 @@ func (c *Cipher) Open(b []byte) ([]byte, error) {
 	return out.Bytes(), err
 }
 
+// CheckPlain è il testo cifrato in vault-meta.json per verificare la password.
+const CheckPlain = "encluca-password-ok"
+
+// DecryptedSize restituisce la dimensione in chiaro di un file cifrato di n byte
+// (-1 se n non è una dimensione valida). È l'inverso di EncryptedSize.
+func DecryptedSize(n int64) int64 {
+	n -= int64(fileHeaderSize)
+	if n < 0 {
+		return -1
+	}
+	blocks := n / blockSize
+	rest := n % blockSize
+	size := blocks * blockDataSize
+	if rest > 0 {
+		if rest <= int64(blockHeaderSize) {
+			return -1
+		}
+		size += rest - int64(blockHeaderSize)
+	}
+	return size
+}
+
 // EncryptedSize restituisce la dimensione cifrata di un file in chiaro di n byte.
 func EncryptedSize(n int64) int64 {
 	blocks := n / blockDataSize

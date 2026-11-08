@@ -62,6 +62,8 @@ type hubConfig struct {
 	Devices   []*Device    `json:"devices"`
 	GDrive    GDriveConfig `json:"gdrive"`
 	Lang      string       `json:"lang,omitempty"` // "it" | "en"
+	// BrowseEnabled consente di sfogliare la cassaforte dalla pagina del NAS (decifratura nel browser)
+	BrowseEnabled bool `json:"browseEnabled,omitempty"`
 }
 
 type Hub struct {
@@ -567,12 +569,13 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen})
 	}
 	seq := h.idx.Seq
+	browse := h.cfg.BrowseEnabled
 	h.mu.Unlock()
 	_, metaErr := os.Stat(h.metaPath())
 	_, pwFileErr := os.Stat(filepath.Join(h.dir, "admin-password.txt"))
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": Version, "files": files, "bytes": size, "seq": seq,
-		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint,
+		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint, "browseEnabled": browse,
 		"defaultPassword": pwFileErr == nil, "lang": getLang(),
 		"gdrive": h.gd.status(), "log": h.log.Lines(),
 	})
@@ -674,7 +677,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; img-src 'self' data: blob:; connect-src 'self'; form-action 'self'; base-uri 'none'")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -695,6 +698,12 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/admin/api/devices", h.withAdmin(h.adminDevices))
 	mux.HandleFunc("/admin/api/password", h.withAdmin(h.adminPassword))
 	mux.HandleFunc("/admin/api/lang", h.withAdmin(h.adminLang))
+	mux.HandleFunc("/admin/api/browse", h.withAdmin(h.adminBrowseToggle))
+	mux.HandleFunc("/admin/api/vault/meta", h.withBrowse(h.apiBrowseMeta))
+	mux.HandleFunc("/admin/api/vault/list", h.withBrowse(h.apiBrowseList))
+	mux.HandleFunc("/admin/api/vault/file", h.withBrowse(h.apiBrowseFile))
+	mux.HandleFunc("/admin/wasm_exec.js", serveStatic("web/wasm_exec.js", "text/javascript; charset=utf-8"))
+	mux.HandleFunc("/admin/vault.wasm", serveStatic("web/vault.wasm", "application/wasm"))
 	mux.HandleFunc("/admin/api/gdrive/config", h.withAdmin(h.gd.apiConfig))
 	mux.HandleFunc("/admin/api/gdrive/auth", h.withAdmin(h.gd.apiAuth))
 	mux.HandleFunc("/admin/api/gdrive/run", h.withAdmin(h.gd.apiRun))

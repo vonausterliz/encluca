@@ -35,6 +35,7 @@
   <div class="layout">
     <nav class="sidenav" aria-label="Sezioni">
       <a href="#panoramica"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>Panoramica</a>
+      <a href="#file"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></svg>File</a>
       <a href="#dispositivi"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v10H4zm-2 12h20v-1H2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>Dispositivi</a>
       <a href="#drive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.5 7.5 0 0 0 5.35 8.04 6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96"/></svg>Backup Google Drive</a>
       <a href="#impostazioni"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.7a7 7 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg>Impostazioni</a>
@@ -64,6 +65,33 @@
             <button id="pwBtn" class="primary">Cambia password</button>
           </div>
           <div class="msg" id="pwMsg"></div>
+        </div>
+      </div>
+
+      <div class="card" id="file">
+        <div class="card-header"><h2>File della cassaforte</h2><span class="chip" id="brChip">Bloccata</span></div>
+        <div class="card-body">
+          <div id="brOff">
+            <p>Funzione disattivata. Puoi attivarla in <a href="#impostazioni">Impostazioni</a>: ti permette di sfogliare e scaricare i file da questa pagina.</p>
+          </div>
+          <div id="brLocked" class="hidden">
+            <p>Inserisci la password della cassaforte. Viene usata solo in questo browser per decifrare nomi e file: il NAS non la riceve e non viene salvata.</p>
+            <p class="hint">Usa questa funzione solo da un computer di cui ti fidi. Impronta del certificato del NAS: <code id="brFp"></code> (deve coincidere con quella mostrata dal browser cliccando sul lucchetto).</p>
+            <div class="row" style="margin-top:10px">
+              <input id="brPw" type="password" placeholder="Password della cassaforte" autocomplete="off" style="flex:1 1 260px;max-width:360px">
+              <button id="brUnlock" class="primary">Sblocca</button>
+            </div>
+            <div class="msg" id="brMsg"></div>
+          </div>
+          <div id="brOpen" class="hidden">
+            <div class="row" style="justify-content:space-between;margin-bottom:8px">
+              <nav id="brCrumbs" class="br-crumbs" aria-label="Percorso"></nav>
+              <button id="brLock" class="ghost small">Blocca</button>
+            </div>
+            <table class="br-table"><thead><tr><th>Nome</th><th>Dimensione</th><th>Modificato</th><th></th></tr></thead><tbody id="brRows"></tbody></table>
+            <div class="msg" id="brOpenMsg"></div>
+            <p class="hint">Si blocca da sola dopo 10 minuti di inattività. I file scaricati sono in chiaro sul computer: cancellali quando non servono più.</p>
+          </div>
         </div>
       </div>
 
@@ -126,6 +154,8 @@
           <label for="langSel" style="margin-top:0">Lingua / Language</label>
           <select id="langSel"><option value="it">Italiano</option><option value="en">English</option></select>
           <p class="hint">Vale per questa pagina, per il registro e per i messaggi dell'hub.</p>
+          <label class="check" style="margin-top:20px"><input type="checkbox" id="brEnable"> Consenti di sfogliare la cassaforte da questa pagina</label>
+          <p class="hint">La password viene digitata in una pagina inviata dal NAS e la decifratura avviene nel browser. Se il NAS venisse compromesso, la pagina potrebbe essere alterata per intercettarla: lascia l'opzione spenta se non ti serve.</p>
         </div>
       </div>
 
@@ -173,7 +203,21 @@ const EN = {
  'Backup avviato.':'Backup started.','Scollegare Google Drive? I file già caricati restano su Drive.':'Disconnect Google Drive? Files already uploaded stay on Drive.',
  '{d} di {n} file':'{d} of {n} files','Caricamento su Google Drive':'Uploading to Google Drive',
  'Ultimo backup':'Last backup','Ultimo backup completato: {d}.':'Last completed backup: {d}.','non attivo':'not active',
- 'adesso':'just now','{n} min fa':'{n} min ago','{n} ore fa':'{n} hours ago','{n} giorni fa':'{n} days ago',
+ 'adesso':'just now',
+ 'File':'Files','File della cassaforte':'Vault files','Bloccata':'Locked','Sbloccata':'Unlocked','Disattivata':'Disabled',
+ 'Funzione disattivata. Puoi attivarla in':'Feature disabled. You can enable it in',
+ ': ti permette di sfogliare e scaricare i file da questa pagina.':': it lets you browse and download files from this page.',
+ 'Inserisci la password della cassaforte. Viene usata solo in questo browser per decifrare nomi e file: il NAS non la riceve e non viene salvata.':'Enter the vault password. It is used only in this browser to decrypt names and files: the NAS never receives it and it is not stored.',
+ 'Usa questa funzione solo da un computer di cui ti fidi. Impronta del certificato del NAS:':'Use this feature only from a computer you trust. NAS certificate fingerprint:',
+ '(deve coincidere con quella mostrata dal browser cliccando sul lucchetto).':'(it must match the one shown by the browser when clicking the padlock).',
+ 'Password della cassaforte':'Vault password','Sblocca':'Unlock','Blocca':'Lock','Percorso':'Path','Dimensione':'Size','Modificato':'Modified',
+ 'Si blocca da sola dopo 10 minuti di inattività. I file scaricati sono in chiaro sul computer: cancellali quando non servono più.':'It locks itself after 10 minutes of inactivity. Downloaded files are in plaintext on the computer: delete them when no longer needed.',
+ 'Consenti di sfogliare la cassaforte da questa pagina':'Allow browsing the vault from this page',
+ "La password viene digitata in una pagina inviata dal NAS e la decifratura avviene nel browser. Se il NAS venisse compromesso, la pagina potrebbe essere alterata per intercettarla: lascia l'opzione spenta se non ti serve.":'The password is typed into a page sent by the NAS and decryption happens in the browser. If the NAS were compromised, the page could be altered to intercept it: leave this off if you do not need it.',
+ 'Impossibile caricare il modulo di decifratura.':'Unable to load the decryption module.','Bloccata per inattività.':'Locked due to inactivity.',
+ 'Cartella vuota.':'Empty folder.','{n} file':'{n} files','Scarica':'Download',"{n} elementi non decifrabili (salvati con un'altra password?).":'{n} items cannot be decrypted (saved with another password?).',
+ 'Decifratura…':'Decrypting…','File danneggiato o non decifrabile.':'File damaged or cannot be decrypted.','Sblocco in corso…':'Unlocking…',
+ 'password errata':'wrong password','metadati non validi':'invalid metadata','{n} min fa':'{n} min ago','{n} ore fa':'{n} hours ago','{n} giorni fa':'{n} days ago',
 };
 async function api(path, body, method){
   const opt = {headers:{'X-Encluca':'1','Content-Type':'application/json'}};
@@ -242,19 +286,20 @@ async function refresh(){
   const gp = $('gdProg'); gp.innerHTML = '';
   if(g.running && g.progress && g.progress.total) gp.append(progHTML(t('Caricamento su Google Drive'), g.progress));
   if(s.lang && s.lang !== LANG) setLangUI(s.lang);
+  renderBrowseState(s);
   $('log').textContent = s.log.join('\n');
 }
 // voce attiva nel menu laterale in base alla sezione visibile
 const links = [...document.querySelectorAll('.sidenav a')];
 const markActive = id => links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+id));
 const io = new IntersectionObserver(es => { for(const e of es) if(e.isIntersecting) markActive(e.target.id); }, {rootMargin:'-60px 0px -70% 0px'});
-for(const id of ['panoramica','dispositivi','drive','impostazioni','registro']) io.observe($(id));
+for(const id of ['panoramica','file','dispositivi','drive','impostazioni','registro']) io.observe($(id));
 markActive('panoramica');
 
 $('loginBtn').onclick = async () => { $('loginMsg').textContent='';
   try{ await api('/admin/api/login', {Password:$('loginPw').value}); $('loginPw').value=''; refresh(); }catch(e){ $('loginMsg').textContent=e.message; } };
 $('loginPw').addEventListener('keydown', e => { if(e.key==='Enter') $('loginBtn').click(); });
-$('logoutBtn').onclick = async () => { await api('/admin/api/logout', {}); showLogin(); };
+$('logoutBtn').onclick = async () => { brLockNow(); await api('/admin/api/logout', {}); showLogin(); };
 $('pwBtn').onclick = async () => { try{ await api('/admin/api/password', {Old:$('oldPw').value, New:$('newPw').value}); $('pwMsg').textContent=t('Password cambiata.'); $('oldPw').value=$('newPw').value=''; refresh(); }catch(e){ $('pwMsg').textContent=e.message; } };
 $('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('copyBtn').textContent=t('Copia codice'); $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
 $('copyBtn').onclick = () => navigator.clipboard.writeText($('codeText').textContent).then(()=>$('copyBtn').textContent=t('Copiato'));
@@ -263,6 +308,118 @@ $('gdSave').onclick = async () => { try{ await api('/admin/api/gdrive/config', g
 $('gdAuth').onclick = async () => { try{ await api('/admin/api/gdrive/config', gdBody()); $('gdSecret').value=''; await api('/admin/api/gdrive/auth', {}); $('gdMsg').textContent=''; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
 $('gdRun').onclick = async () => { try{ await api('/admin/api/gdrive/run', {}); $('gdMsg').textContent=t('Backup avviato.'); refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
 $('gdOff').onclick = async () => { if(confirm(t('Scollegare Google Drive? I file già caricati restano su Drive.'))){ await api('/admin/api/gdrive/disconnect', {}); refresh(); } };
+
+// ---------- esplorazione della cassaforte (decifratura nel browser) ----------
+const BR = {tree: null, cwd: [], timer: null, enabled: false};
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></svg>';
+const FILE_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zm0 2.5L17.5 8H14z"/></svg>';
+async function loadWasm(){
+  if(window.enclucaVault) return;
+  await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = '/admin/wasm_exec.js';
+    sc.onload = ok; sc.onerror = () => ko(new Error(t('Impossibile caricare il modulo di decifratura.'))); document.head.append(sc); });
+  const go = new Go();
+  const r = await WebAssembly.instantiateStreaming(fetch('/admin/vault.wasm'), go.importObject);
+  go.run(r.instance);
+}
+function buildTree(list){
+  const root = {dirs: {}, files: []}; let bad = 0;
+  for(const it of list){
+    const name = enclucaVault.name(it.p);
+    if(name === null){ bad++; continue; }
+    const parts = name.split('/'); let d = root;
+    for(const part of parts.slice(0, -1)) d = d.dirs[part] || (d.dirs[part] = {dirs: {}, files: []});
+    d.files.push({name: parts[parts.length-1], size: it.size, mtime: it.mtime, p: it.p});
+  }
+  root.bad = bad;
+  return root;
+}
+function countFiles(d){ let n = d.files.length; for(const k in d.dirs) n += countFiles(d.dirs[k]); return n; }
+function brTouch(){ clearTimeout(BR.timer); BR.timer = setTimeout(() => { brLockNow(); $('brMsg').textContent = t('Bloccata per inattività.'); }, 10*60*1000); }
+function brLockNow(){
+  clearTimeout(BR.timer);
+  if(window.enclucaVault) enclucaVault.lock();
+  BR.tree = null; BR.cwd = []; $('brRows').innerHTML = ''; $('brCrumbs').innerHTML = '';
+  showBrowse();
+}
+function showBrowse(){
+  const open = !!BR.tree;
+  $('brOff').classList.toggle('hidden', BR.enabled);
+  $('brLocked').classList.toggle('hidden', !BR.enabled || open);
+  $('brOpen').classList.toggle('hidden', !BR.enabled || !open);
+  $('brChip').className = 'chip ' + (open ? 'wait' : BR.enabled ? 'ok' : '');
+  $('brChip').textContent = open ? t('Sbloccata') : BR.enabled ? t('Bloccata') : t('Disattivata');
+}
+function renderBrowseState(s){
+  BR.enabled = !!s.browseEnabled;
+  if(!BR.enabled && BR.tree) brLockNow();
+  if(document.activeElement !== $('brEnable')) $('brEnable').checked = BR.enabled;
+  $('brFp').textContent = (s.fingerprint || '').replace(/(..)(?!$)/g, '$1:').slice(0, 47) + '…';
+  showBrowse();
+}
+function renderBrowse(){
+  let d = BR.tree; for(const k of BR.cwd) d = d.dirs[k];
+  const cr = $('brCrumbs'); cr.innerHTML = '';
+  const crumb = (label, depth) => { const b = document.createElement('button'); b.className = 'linkbtn'; b.textContent = label;
+    b.onclick = () => { BR.cwd = BR.cwd.slice(0, depth); brTouch(); renderBrowse(); }; return b; };
+  cr.append(crumb(t('Cassaforte'), 0));
+  BR.cwd.forEach((k, i) => { cr.append(' › '); cr.append(crumb(k, i+1)); });
+  const tb = $('brRows'); tb.innerHTML = '';
+  const coll = new Intl.Collator(LOCALE(), {numeric: true, sensitivity: 'base'});
+  const dirs = Object.keys(d.dirs).sort(coll.compare), files = d.files.slice().sort((a, b) => coll.compare(a.name, b.name));
+  if(!dirs.length && !files.length){ const tr = document.createElement('tr'); tr.innerHTML = '<td colspan="4" class="empty"></td>'; tr.firstChild.textContent = t('Cartella vuota.'); tb.append(tr); }
+  for(const k of dirs){
+    const tr = document.createElement('tr'); tr.className = 'br-dir';
+    tr.innerHTML = '<td><span class="fname">' + FOLDER_ICON + '<span></span></span></td><td></td><td></td><td></td>';
+    tr.querySelector('.fname span').textContent = k;
+    tr.children[1].textContent = t('{n} file', {n: countFiles(d.dirs[k])});
+    tr.onclick = () => { BR.cwd.push(k); brTouch(); renderBrowse(); };
+    tb.append(tr);
+  }
+  for(const f of files){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><span class="fname">' + FILE_ICON + '<span></span></span></td><td></td><td></td><td style="text-align:right"><button class="ghost small"></button></td>';
+    tr.querySelector('.fname span').textContent = f.name;
+    tr.children[1].textContent = f.size >= 0 ? size(f.size) : '?';
+    tr.children[2].textContent = f.mtime ? new Date(f.mtime / 1e6).toLocaleString(LOCALE()) : '';
+    const b = tr.querySelector('button'); b.textContent = t('Scarica');
+    b.onclick = () => brDownload(f, b);
+    tb.append(tr);
+  }
+  $('brOpenMsg').textContent = BR.tree.bad ? t('{n} elementi non decifrabili (salvati con un\'altra password?).', {n: BR.tree.bad}) : '';
+}
+async function brDownload(f, btn){
+  brTouch(); btn.disabled = true; const label = btn.textContent; btn.textContent = t('Decifratura…');
+  try{
+    const r = await fetch('/admin/api/vault/file?p=' + encodeURIComponent(f.p));
+    if(!r.ok) throw new Error(t('errore') + ' ' + r.status);
+    const plain = enclucaVault.file(new Uint8Array(await r.arrayBuffer()));
+    if(!plain) throw new Error(t('File danneggiato o non decifrabile.'));
+    const url = URL.createObjectURL(new Blob([plain]));
+    const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }catch(e){ $('brOpenMsg').textContent = e.message; }
+  btn.textContent = label; btn.disabled = false;
+}
+$('brUnlock').onclick = async () => {
+  const btn = $('brUnlock'); btn.disabled = true; $('brMsg').textContent = t('Sblocco in corso…');
+  try{
+    await loadWasm();
+    const meta = await api('/admin/api/vault/meta');
+    await new Promise(r => setTimeout(r, 30)); // lascia aggiornare la pagina prima del calcolo della chiave
+    const err = enclucaVault.unlock($('brPw').value, meta.salt, meta.check);
+    $('brPw').value = '';
+    if(err) throw new Error(t(err));
+    BR.tree = buildTree(await api('/admin/api/vault/list')); BR.cwd = [];
+    $('brMsg').textContent = ''; showBrowse(); renderBrowse(); brTouch();
+  }catch(e){ $('brMsg').textContent = e.message; }
+  btn.disabled = false;
+};
+$('brPw').addEventListener('keydown', e => { if(e.key === 'Enter') $('brUnlock').click(); });
+$('brLock').onclick = () => brLockNow();
+$('brEnable').onchange = async () => {
+  try{ await api('/admin/api/browse', {Enabled: $('brEnable').checked}); refresh(); }
+  catch(e){ alert(e.message); $('brEnable').checked = !$('brEnable').checked; }
+};
 $('langSel').onchange = async () => {
   const l = $('langSel').value;
   try{ await api('/admin/api/lang', {Lang:l}); setLangUI(l); }catch(e){ alert(e.message); }

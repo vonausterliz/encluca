@@ -19,9 +19,9 @@ import (
 	"time"
 )
 
-var Version = "0.1.5"
+var Version = "0.1.6"
 
-//go:embed web/*.html web/*.css web/*.js
+//go:embed web/*.html web/*.css web/*.js web/*.wasm
 var webFS embed.FS
 
 //go:embed assets/logo.svg

@@ -220,3 +220,10 @@ func (p *progress) snapshot() *progress {
 	c := *p
 	return &c
 }
+
+func fileModTime(f *os.File) (t time.Time) {
+	if info, err := f.Stat(); err == nil {
+		t = info.ModTime()
+	}
+	return
+}

@@ -5,6 +5,10 @@ cd "$(dirname "$0")"
 VERSION="$(grep -oP 'Version = "\K[^"]+' main.go)"
 rm -rf dist && mkdir -p dist
 
+# modulo WebAssembly per sfogliare la cassaforte dalla pagina del NAS (incluso nel binario)
+GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w" -o web/vault.wasm ./cmd/vaultwasm
+cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/wasm_exec.js
+
 build() { # os arch packaging-dir
   local os=$1 arch=$2 pkg=$3 ext="" ldflags="-s -w"
   [ "$os" = windows ] && ext=".exe" && ldflags="$ldflags -H=windowsgui"
