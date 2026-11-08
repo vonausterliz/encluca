@@ -39,6 +39,7 @@
       <a href="#panoramica"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>Panoramica</a>
       <a href="#dispositivi"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v10H4zm-2 12h20v-1H2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>Dispositivi</a>
       <a href="#drive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.5 7.5 0 0 0 5.35 8.04 6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96"/></svg>Backup Google Drive</a>
+      <a href="#impostazioni"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.7a7 7 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg>Impostazioni</a>
       <a href="#registro"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h12v2H3z"/></svg>Registro</a>
     </nav>
 
@@ -90,6 +91,7 @@
         <div class="card-header"><h2>Backup su Google Drive</h2><span class="chip" id="gdChip">–</span></div>
         <div class="card-body">
           <p id="gdState"></p>
+          <div id="gdProg"></div>
           <div id="gdSetup">
             <ol>
               <li>Apri la <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">console Google Cloud</a>, crea un progetto e abilita la <b>Google Drive API</b>. È gratuita e non serve la fatturazione.</li>
@@ -119,24 +121,79 @@
         </div>
       </div>
 
+      <div class="card" id="impostazioni">
+        <div class="card-header"><h2>Impostazioni</h2></div>
+        <div class="card-body">
+          <label for="langSel" style="margin-top:0">Lingua / Language</label>
+          <select id="langSel"><option value="it">Italiano</option><option value="en">English</option></select>
+          <p class="hint">Vale per questa pagina, per il registro e per i messaggi dell'hub.</p>
+        </div>
+      </div>
+
       <div class="card" id="registro">
         <div class="card-header"><h2>Registro attività</h2></div>
-        <div class="card-body"><pre class="log" id="log"></pre></div>
+        <div class="card-body"><pre class="log" id="log" data-noi18n></pre></div>
       </div>
     </main>
   </div>
 </div>
 <script>
 const $ = id => document.getElementById(id);
+/*I18N*/
+const EN = {
+ 'encluca · NAS':'encluca · NAS',"Amministrazione dell'hub sul NAS":'NAS hub administration','Password amministratore':'Administrator password',
+ "Al primo avvio la trovi nei log dell'app o nel file":'On first start you find it in the app logs or in the file','della cartella dati.':'in the data folder.',
+ 'Accedi':'Log in','Esci':'Log out','Sezioni':'Sections','Panoramica':'Overview','Dispositivi':'Devices','Backup Google Drive':'Google Drive backup',
+ 'Impostazioni':'Settings','Registro':'Log','encluca › Hub':'encluca › Hub','File cifrati':'Encrypted files','Spazio occupato':'Space used','Cassaforte':'Vault',
+ 'Cambia la password iniziale':'Change the initial password','Da fare':'To do',
+ 'Stai usando la password generata al primo avvio. Scegline una tua: il file che contiene quella iniziale verrà cancellato.':'You are using the password generated on first start. Choose your own: the file containing the initial one will be deleted.',
+ 'Password attuale':'Current password','Nuova password (min. 10 caratteri)':'New password (min. 10 characters)','Cambia password':'Change password',
+ 'I computer autorizzati a sincronizzare la cassaforte. Il NAS non conosce la password della cassaforte: conserva solo dati cifrati.':'Computers authorized to sync the vault. The NAS does not know the vault password: it only stores encrypted data.',
+ 'Nome':'Name','Ultimo contatto':'Last contact','Aggiungi un computer':'Add a computer','Es. MacBook di Luca':"E.g. Luca's MacBook",
+ 'Indirizzo del NAS visto dai PC (facoltativo)':'NAS address as seen by the PCs (optional)','Aggiungi dispositivo':'Add device',
+ "Incolla questo codice nell'app encluca del computer. Vale per un solo dispositivo e non viene mostrato di nuovo.":'Paste this code into the encluca app on the computer. It is valid for one device only and will not be shown again.',
+ 'Copia codice':'Copy code','Backup su Google Drive':'Backup to Google Drive','Apri la':'Open the','console Google Cloud':'Google Cloud console',
+ ', crea un progetto e abilita la':', create a project and enable the','Google Drive API':'Google Drive API','. È gratuita e non serve la fatturazione.':'. It is free and needs no billing.',
+ 'In':'In','Schermata consenso OAuth':'OAuth consent screen','scegli':'choose','Esterno':'External',', poi in':', then in','Pubblico':'Audience','premi':'press',
+ 'Pubblica app':'Publish app','e porta lo stato a':'and set the status to','In produzione':'In production',
+ ". In stato “Test” Google revoca l'accesso dopo 7 giorni.":'. In “Testing” status Google revokes access after 7 days.',
+ 'Crea delle credenziali':'Create','ID client OAuth':'OAuth client ID','di tipo':'credentials of type','TV e dispositivi con input limitato':'TVs and Limited Input devices',
+ 'Incolla qui Client ID e Client Secret, poi premi':'Paste Client ID and Client Secret here, then press','Collega Google Drive':'Connect Google Drive',
+ 'lascia vuoto per non cambiarlo':'leave empty to keep it','Cartella su Drive':'Folder on Drive','Conserva versioni (giorni)':'Keep versions (days)',
+ 'Backup completo ogni (min)':'Full backup every (min)','Esegui backup ora':'Back up now','Salva impostazioni':'Save settings','Scollega':'Disconnect',
+ 'Apri':'Open','da qualunque dispositivo e inserisci il codice:':'from any device and enter the code:','Registro attività':'Activity log',
+ "Vale per questa pagina, per il registro e per i messaggi dell'hub.":'Applies to this page, the log and the hub messages.',
+ // dinamici
+ 'mai':'never','accesso richiesto':'login required','errore':'error','creata':'created','da creare':'not created',
+ 'Nessun dispositivo: aggiungi il primo computer qui sotto.':'No devices: add the first computer below.','Revoca':'Revoke','Attivo':'Active','Inattivo':'Inactive',
+ 'Revocare “{n}”? Non potrà più sincronizzare.':'Revoke “{n}”? It will no longer be able to sync.','Non configurato':'Not configured',
+ 'Il backup su Google Drive non è ancora configurato.':'The Google Drive backup is not configured yet.','Da autorizzare':'Needs authorization',
+ "Credenziali salvate: manca l'autorizzazione dell'account Google.":'Credentials saved: the Google account authorization is missing.',
+ 'In corso':'Running','Backup in corso…':'Backup running…','Errore':'Error','Ultimo backup fallito: ':'Last backup failed: ',
+ 'Ultimo backup riuscito: ':'Last successful backup: ','Password cambiata.':'Password changed.','Copiato':'Copied','Impostazioni salvate.':'Settings saved.',
+ 'Backup avviato.':'Backup started.','Scollegare Google Drive? I file già caricati restano su Drive.':'Disconnect Google Drive? Files already uploaded stay on Drive.',
+ '{d} di {n} file':'{d} of {n} files','Caricamento su Google Drive':'Uploading to Google Drive',
+};
 async function api(path, body, method){
   const opt = {headers:{'X-Encluca':'1','Content-Type':'application/json'}};
   if(body !== undefined || method){ opt.method = method || 'POST'; opt.body = JSON.stringify(body || {}); }
   const r = await fetch(path, opt); const j = await r.json().catch(()=>({}));
-  if(r.status === 401 && path !== '/admin/api/login'){ showLogin(); throw new Error('accesso richiesto'); }
-  if(!r.ok) throw new Error(j.error || ('errore ' + r.status)); return j;
+  if(r.status === 401 && path !== '/admin/api/login'){ showLogin(); throw new Error(t('accesso richiesto')); }
+  if(!r.ok) throw new Error(j.error || (t('errore') + ' ' + r.status)); return j;
 }
 const size = b => { const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024 && i<u.length-1){b/=1024;i++} return (i?b.toFixed(1):b)+' '+u[i]; };
-const when = t => (!t || t.startsWith('0001')) ? 'mai' : new Date(t).toLocaleString('it-IT');
+const when = x => (!x || x.startsWith('0001')) ? t('mai') : new Date(x).toLocaleString(LOCALE());
+function progHTML(title, p){
+  const pct = p.totalBytes > 0 ? 100*p.doneBytes/p.totalBytes : (p.total ? 100*p.done/p.total : 0);
+  const d = document.createElement('div'); d.className = 'prog';
+  d.innerHTML = '<div class="lbl"><span></span><span></span></div><div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>';
+  d.querySelector('.lbl span').textContent = title;
+  d.querySelector('.lbl span:last-child').textContent = t('{d} di {n} file', {d:p.done, n:p.total}) + (p.totalBytes ? ' · ' + size(p.doneBytes) + ' / ' + size(p.totalBytes) : '');
+  d.querySelector('.track').setAttribute('aria-valuenow', Math.round(pct));
+  d.querySelector('.fill').style.width = Math.min(100, pct).toFixed(1) + '%';
+  return d;
+}
+function onLangChange(){ refresh(); }
 const chip = (cls, text) => '<span class="chip '+cls+'">'+text+'</span>';
 function showLogin(){ $('loginBox').classList.remove('hidden'); $('app').classList.add('hidden'); $('loginPw').focus(); }
 let filled = false;
@@ -145,27 +202,27 @@ async function refresh(){
   $('loginBox').classList.add('hidden'); $('app').classList.remove('hidden');
   $('ver').textContent = 'v' + s.version;
   $('nFiles').textContent = s.files; $('nSize').textContent = size(s.bytes); $('nDev').textContent = s.devices.length;
-  $('nVault').textContent = s.vaultCreated ? 'creata' : 'da creare';
+  $('nVault').textContent = s.vaultCreated ? t('creata') : t('da creare');
   $('pwWarn').classList.toggle('hidden', !s.defaultPassword);
   const tb = $('devs'); tb.innerHTML = '';
-  if(!s.devices.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="3" class="empty">Nessun dispositivo: aggiungi il primo computer qui sotto.</td>'; tb.append(tr); }
+  if(!s.devices.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="3" class="empty"></td>'; tr.firstChild.textContent=t('Nessun dispositivo: aggiungi il primo computer qui sotto.'); tb.append(tr); }
   for(const d of s.devices){
     const tr = document.createElement('tr');
     const recent = d.lastSeen && (Date.now()-new Date(d.lastSeen)) < 5*60*1000;
-    tr.innerHTML = '<td></td><td></td><td style="text-align:right"><button class="danger small">Revoca</button></td>';
+    tr.innerHTML = '<td></td><td></td><td style="text-align:right"><button class="danger small">'+t('Revoca')+'</button></td>';
     tr.children[0].textContent = d.name;
-    tr.children[1].innerHTML = chip(recent?'ok':'wait', recent?'Attivo':'Inattivo') + ' ';
+    tr.children[1].innerHTML = chip(recent?'ok':'wait', recent?t('Attivo'):t('Inattivo')) + ' ';
     tr.children[1].append(when(d.lastSeen));
-    tr.querySelector('button').onclick = async () => { if(confirm('Revocare “'+d.name+'”? Non potrà più sincronizzare.')){ await api('/admin/api/devices?id='+encodeURIComponent(d.id), {}, 'DELETE'); refresh(); } };
+    tr.querySelector('button').onclick = async () => { if(confirm(t('Revocare “{n}”? Non potrà più sincronizzare.', {n:d.name}))){ await api('/admin/api/devices?id='+encodeURIComponent(d.id), {}, 'DELETE'); refresh(); } };
     tb.append(tr);
   }
   const g = s.gdrive;
   let c, st;
-  if(!g.configured){ c=['wait','Non configurato']; st='Il backup su Google Drive non è ancora configurato.'; }
-  else if(!g.authorized){ c=['wait','Da autorizzare']; st='Credenziali salvate: manca l\'autorizzazione dell\'account Google.'; }
-  else if(g.running){ c=['info','In corso']; st='Backup in corso…'; }
-  else if(g.lastError){ c=['ko','Errore']; st='Ultimo backup fallito: '; }
-  else { c=['ok','Attivo']; st='Ultimo backup riuscito: ' + when(g.lastOK) + (g.lastInfo ? ' ('+g.lastInfo+')' : '') + '.'; }
+  if(!g.configured){ c=['wait',t('Non configurato')]; st=t('Il backup su Google Drive non è ancora configurato.'); }
+  else if(!g.authorized){ c=['wait',t('Da autorizzare')]; st=t('Credenziali salvate: manca l\'autorizzazione dell\'account Google.'); }
+  else if(g.running){ c=['info',t('In corso')]; st=t('Backup in corso…'); }
+  else if(g.lastError){ c=['ko',t('Errore')]; st=t('Ultimo backup fallito: '); }
+  else { c=['ok',t('Attivo')]; st=t('Ultimo backup riuscito: ') + when(g.lastOK) + (g.lastInfo ? ' ('+g.lastInfo+')' : '') + '.'; }
   $('gdChip').className = 'chip ' + c[0]; $('gdChip').textContent = c[1];
   $('gdState').textContent = st; if(g.lastError && g.authorized && !g.running) $('gdState').append(g.lastError);
   $('gdSetup').classList.toggle('hidden', g.authorized);
@@ -173,27 +230,34 @@ async function refresh(){
   if(!filled){ $('gdId').value = g.clientId || ''; $('gdFolder').value = g.folderName; $('gdRet').value = g.retentionDays; $('gdInt').value = g.intervalMin; filled = true; }
   $('gdPending').classList.toggle('hidden', !g.pending);
   if(g.pending){ $('gdUrl').href = g.pending.url; $('gdUrl').textContent = g.pending.url; $('gdCode').textContent = g.pending.userCode; }
+  const gp = $('gdProg'); gp.innerHTML = '';
+  if(g.running && g.progress && g.progress.total) gp.append(progHTML(t('Caricamento su Google Drive'), g.progress));
+  if(s.lang && s.lang !== LANG) setLangUI(s.lang);
   $('log').textContent = s.log.join('\n');
 }
 // voce attiva nel menu laterale in base alla sezione visibile
 const links = [...document.querySelectorAll('.sidenav a')];
 const markActive = id => links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#'+id));
 const io = new IntersectionObserver(es => { for(const e of es) if(e.isIntersecting) markActive(e.target.id); }, {rootMargin:'-60px 0px -70% 0px'});
-for(const id of ['panoramica','dispositivi','drive','registro']) io.observe($(id));
+for(const id of ['panoramica','dispositivi','drive','impostazioni','registro']) io.observe($(id));
 markActive('panoramica');
 
 $('loginBtn').onclick = async () => { $('loginMsg').textContent='';
   try{ await api('/admin/api/login', {Password:$('loginPw').value}); $('loginPw').value=''; refresh(); }catch(e){ $('loginMsg').textContent=e.message; } };
 $('loginPw').addEventListener('keydown', e => { if(e.key==='Enter') $('loginBtn').click(); });
 $('logoutBtn').onclick = async () => { await api('/admin/api/logout', {}); showLogin(); };
-$('pwBtn').onclick = async () => { try{ await api('/admin/api/password', {Old:$('oldPw').value, New:$('newPw').value}); $('pwMsg').textContent='Password cambiata.'; $('oldPw').value=$('newPw').value=''; refresh(); }catch(e){ $('pwMsg').textContent=e.message; } };
-$('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('copyBtn').textContent='Copia codice'; $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
-$('copyBtn').onclick = () => navigator.clipboard.writeText($('codeText').textContent).then(()=>$('copyBtn').textContent='Copiato');
+$('pwBtn').onclick = async () => { try{ await api('/admin/api/password', {Old:$('oldPw').value, New:$('newPw').value}); $('pwMsg').textContent=t('Password cambiata.'); $('oldPw').value=$('newPw').value=''; refresh(); }catch(e){ $('pwMsg').textContent=e.message; } };
+$('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('copyBtn').textContent=t('Copia codice'); $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
+$('copyBtn').onclick = () => navigator.clipboard.writeText($('codeText').textContent).then(()=>$('copyBtn').textContent=t('Copiato'));
 const gdBody = () => ({clientId:$('gdId').value, clientSecret:$('gdSecret').value, folderName:$('gdFolder').value, retentionDays:+$('gdRet').value, intervalMin:+$('gdInt').value});
-$('gdSave').onclick = async () => { try{ await api('/admin/api/gdrive/config', gdBody()); $('gdSecret').value=''; $('gdMsg').textContent='Impostazioni salvate.'; filled=false; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
+$('gdSave').onclick = async () => { try{ await api('/admin/api/gdrive/config', gdBody()); $('gdSecret').value=''; $('gdMsg').textContent=t('Impostazioni salvate.'); filled=false; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
 $('gdAuth').onclick = async () => { try{ await api('/admin/api/gdrive/config', gdBody()); $('gdSecret').value=''; await api('/admin/api/gdrive/auth', {}); $('gdMsg').textContent=''; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
-$('gdRun').onclick = async () => { try{ await api('/admin/api/gdrive/run', {}); $('gdMsg').textContent='Backup avviato.'; refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
-$('gdOff').onclick = async () => { if(confirm('Scollegare Google Drive? I file già caricati restano su Drive.')){ await api('/admin/api/gdrive/disconnect', {}); refresh(); } };
+$('gdRun').onclick = async () => { try{ await api('/admin/api/gdrive/run', {}); $('gdMsg').textContent=t('Backup avviato.'); refresh(); }catch(e){ $('gdMsg').textContent=e.message; } };
+$('gdOff').onclick = async () => { if(confirm(t('Scollegare Google Drive? I file già caricati restano su Drive.'))){ await api('/admin/api/gdrive/disconnect', {}); refresh(); } };
+$('langSel').onchange = async () => {
+  const l = $('langSel').value;
+  try{ await api('/admin/api/lang', {Lang:l}); setLangUI(l); }catch(e){ alert(e.message); }
+};
 fetch('/admin/api/status').then(r => { if(r.status===401) showLogin(); refresh(); });
 setInterval(refresh, 3000);
 </script>

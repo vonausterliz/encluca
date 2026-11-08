@@ -61,6 +61,7 @@ type hubConfig struct {
 	AdminSalt string       `json:"adminSalt"`
 	Devices   []*Device    `json:"devices"`
 	GDrive    GDriveConfig `json:"gdrive"`
+	Lang      string       `json:"lang,omitempty"` // "it" | "en"
 }
 
 type Hub struct {
@@ -103,18 +104,19 @@ func newHub(dir, listen string) (*Hub, error) {
 		}
 	}
 	if err := loadJSON(h.cfgPath(), &h.cfg); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, fmt.Errorf("config hub illeggibile: %w", err)
+		return nil, fmt.Errorf(T("config hub illeggibile: %w"), err)
 	}
+	setLang(h.cfg.Lang)
 	if h.cfg.AdminHash == "" {
 		pw := randPassword(16)
 		h.setAdminPassword(pw)
 		pwFile := filepath.Join(dir, "admin-password.txt")
 		os.WriteFile(pwFile, []byte(pw+"\n"), 0o600)
-		h.log.Printf("Password amministratore iniziale: %s (salvata anche in %s)", pw, pwFile)
+		h.log.Printf(T("Password amministratore iniziale: %s (salvata anche in %s)"), pw, pwFile)
 	}
 	if err := loadJSON(h.indexPath(), &h.idx); err != nil {
 		if !errors.Is(err, fs.ErrNotExist) {
-			return nil, fmt.Errorf("indice illeggibile: %w", err)
+			return nil, fmt.Errorf(T("indice illeggibile: %w"), err)
 		}
 		if err := h.rebuildIndex(); err != nil {
 			return nil, err
@@ -163,7 +165,7 @@ func (h *Hub) rebuildIndex() error {
 		return err
 	}
 	if len(h.idx.Entries) > 0 {
-		h.log.Printf("Indice ricostruito: %d file", len(h.idx.Entries))
+		h.log.Printf(T("Indice ricostruito: %d file"), len(h.idx.Entries))
 	}
 	return h.saveIndex()
 }
@@ -236,7 +238,7 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := h.deviceAuth(r)
 		if d == nil {
-			writeErr(w, http.StatusUnauthorized, "dispositivo non autorizzato")
+			writeErr(w, http.StatusUnauthorized, T("dispositivo non autorizzato"))
 			return
 		}
 		fn(w, r, d)
@@ -250,7 +252,7 @@ func (h *Hub) apiMeta(w http.ResponseWriter, r *http.Request, d *Device) {
 	case http.MethodGet:
 		b, err := os.ReadFile(h.metaPath())
 		if err != nil {
-			writeErr(w, http.StatusNotFound, "cassaforte non ancora creata")
+			writeErr(w, http.StatusNotFound, T("cassaforte non ancora creata"))
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -258,24 +260,24 @@ func (h *Hub) apiMeta(w http.ResponseWriter, r *http.Request, d *Device) {
 	case http.MethodPut:
 		b, err := io.ReadAll(io.LimitReader(r.Body, 64<<10))
 		if err != nil || !json.Valid(b) {
-			writeErr(w, http.StatusBadRequest, "metadati non validi")
+			writeErr(w, http.StatusBadRequest, T("metadati non validi"))
 			return
 		}
 		h.mu.Lock()
 		defer h.mu.Unlock()
 		if _, err := os.Stat(h.metaPath()); err == nil {
-			writeErr(w, http.StatusConflict, "la cassaforte esiste già")
+			writeErr(w, http.StatusConflict, T("la cassaforte esiste già"))
 			return
 		}
 		if err := writeFileAtomic(h.metaPath(), b, 0o600); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		h.log.Printf("Cassaforte creata dal dispositivo %q", d.Name)
+		h.log.Printf(T("Cassaforte creata dal dispositivo %q"), d.Name)
 		h.gd.changed()
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	default:
-		writeErr(w, http.StatusMethodNotAllowed, "metodo non ammesso")
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
 	}
 }
 
@@ -317,7 +319,7 @@ func (h *Hub) apiChanges(w http.ResponseWriter, r *http.Request, d *Device) {
 func (h *Hub) apiEntry(w http.ResponseWriter, r *http.Request, d *Device) {
 	p := r.URL.Query().Get("p")
 	if !validEncPath(p) {
-		writeErr(w, http.StatusBadRequest, "percorso non valido")
+		writeErr(w, http.StatusBadRequest, T("percorso non valido"))
 		return
 	}
 	h.mu.Lock()
@@ -328,7 +330,7 @@ func (h *Hub) apiEntry(w http.ResponseWriter, r *http.Request, d *Device) {
 	}
 	h.mu.Unlock()
 	if e == nil {
-		writeErr(w, http.StatusNotFound, "non trovato")
+		writeErr(w, http.StatusNotFound, T("non trovato"))
 		return
 	}
 	writeJSON(w, http.StatusOK, &c)
@@ -337,7 +339,7 @@ func (h *Hub) apiEntry(w http.ResponseWriter, r *http.Request, d *Device) {
 func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 	p := r.URL.Query().Get("p")
 	if !validEncPath(p) {
-		writeErr(w, http.StatusBadRequest, "percorso non valido")
+		writeErr(w, http.StatusBadRequest, T("percorso non valido"))
 		return
 	}
 	full := filepath.Join(h.vaultDir(), filepath.FromSlash(p))
@@ -355,7 +357,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 			if f != nil {
 				f.Close()
 			}
-			writeErr(w, http.StatusNotFound, "non trovato")
+			writeErr(w, http.StatusNotFound, T("non trovato"))
 			return
 		}
 		defer f.Close()
@@ -383,12 +385,12 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		}
 		tmp.Close()
 		if err != nil {
-			writeErr(w, http.StatusBadRequest, "upload interrotto")
+			writeErr(w, http.StatusBadRequest, T("upload interrotto"))
 			return
 		}
 		sum := hex.EncodeToString(hs.Sum(nil))
 		if wantSHA != "" && wantSHA != sum {
-			writeErr(w, http.StatusBadRequest, "checksum non corrispondente")
+			writeErr(w, http.StatusBadRequest, T("checksum non corrispondente"))
 			return
 		}
 		h.mu.Lock()
@@ -422,7 +424,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		e := &Entry{Path: p, Rev: curRev + 1, Size: size, SHA: sum, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID}
 		h.idx.Entries[p] = e
 		if err := h.saveIndex(); err != nil {
-			h.log.Printf("ERRORE salvataggio indice: %v", err)
+			h.log.Printf(T("ERRORE salvataggio indice: %v"), err)
 		}
 		h.broadcast()
 		c := *e
@@ -435,7 +437,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		cur := h.idx.Entries[p]
 		if cur == nil || cur.Rev != base {
 			if cur == nil {
-				writeErr(w, http.StatusNotFound, "non trovato")
+				writeErr(w, http.StatusNotFound, T("non trovato"))
 				return
 			}
 			c := *cur
@@ -465,7 +467,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		c := *cur
 		writeJSON(w, http.StatusOK, &c)
 	default:
-		writeErr(w, http.StatusMethodNotAllowed, "metodo non ammesso")
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
 	}
 }
 
@@ -489,11 +491,11 @@ func (h *Hub) adminOK(r *http.Request) bool {
 func (h *Hub) withAdmin(fn http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Header.Get("X-Encluca") != "1" {
-			writeErr(w, http.StatusForbidden, "richiesta non valida")
+			writeErr(w, http.StatusForbidden, T("richiesta non valida"))
 			return
 		}
 		if !h.adminOK(r) {
-			writeErr(w, http.StatusUnauthorized, "accesso richiesto")
+			writeErr(w, http.StatusUnauthorized, T("accesso richiesto"))
 			return
 		}
 		fn(w, r)
@@ -511,7 +513,7 @@ var loginLimiter = struct {
 
 func (h *Hub) adminLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Encluca") != "1" || r.Method != http.MethodPost {
-		writeErr(w, http.StatusForbidden, "richiesta non valida")
+		writeErr(w, http.StatusForbidden, T("richiesta non valida"))
 		return
 	}
 	var body struct{ Password string }
@@ -532,8 +534,8 @@ func (h *Hub) adminLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	h.mu.Unlock()
 	if !ok {
-		h.log.Printf("Accesso amministratore fallito da %s", r.RemoteAddr)
-		writeErr(w, http.StatusUnauthorized, "password errata")
+		h.log.Printf(T("Accesso amministratore fallito da %s"), r.RemoteAddr)
+		writeErr(w, http.StatusUnauthorized, T("password errata"))
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "el_session", Value: sid, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 3600})
@@ -571,8 +573,8 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": Version, "files": files, "bytes": size, "seq": seq,
 		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint,
-		"defaultPassword": pwFileErr == nil,
-		"gdrive":          h.gd.status(), "log": h.log.Lines(),
+		"defaultPassword": pwFileErr == nil, "lang": getLang(),
+		"gdrive": h.gd.status(), "log": h.log.Lines(),
 	})
 }
 
@@ -583,7 +585,7 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		readBody(r, &body)
 		body.Name = strings.TrimSpace(body.Name)
 		if body.Name == "" {
-			writeErr(w, http.StatusBadRequest, "nome dispositivo obbligatorio")
+			writeErr(w, http.StatusBadRequest, T("nome dispositivo obbligatorio"))
 			return
 		}
 		tok := randHex(32)
@@ -602,7 +604,7 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 			u = "https://" + r.Host
 		}
 		code, _ := json.Marshal(map[string]string{"u": u, "t": tok, "f": h.fingerprint})
-		h.log.Printf("Nuovo dispositivo abbinabile: %q", d.Name)
+		h.log.Printf(T("Nuovo dispositivo abbinabile: %q"), d.Name)
 		writeJSON(w, http.StatusOK, map[string]string{"code": "EL1-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
@@ -620,31 +622,50 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		h.saveCfg()
 		h.mu.Unlock()
 		if removed != "" {
-			h.log.Printf("Dispositivo revocato: %q", removed)
+			h.log.Printf(T("Dispositivo revocato: %q"), removed)
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	default:
-		writeErr(w, http.StatusMethodNotAllowed, "metodo non ammesso")
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
 	}
+}
+
+func (h *Hub) adminLang(w http.ResponseWriter, r *http.Request) {
+	var body struct{ Lang string }
+	readBody(r, &body)
+	if !validLang(body.Lang) {
+		writeErr(w, http.StatusBadRequest, "lingua non supportata / unsupported language")
+		return
+	}
+	h.mu.Lock()
+	h.cfg.Lang = body.Lang
+	setLang(body.Lang)
+	err := h.saveCfg()
+	h.mu.Unlock()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (h *Hub) adminPassword(w http.ResponseWriter, r *http.Request) {
 	var body struct{ Old, New string }
 	readBody(r, &body)
 	if len(body.New) < 10 {
-		writeErr(w, http.StatusBadRequest, "la nuova password deve avere almeno 10 caratteri")
+		writeErr(w, http.StatusBadRequest, T("la nuova password deve avere almeno 10 caratteri"))
 		return
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if subtle.ConstantTimeCompare([]byte(hashAdmin(body.Old, h.cfg.AdminSalt)), []byte(h.cfg.AdminHash)) != 1 {
-		writeErr(w, http.StatusUnauthorized, "password attuale errata")
+		writeErr(w, http.StatusUnauthorized, T("password attuale errata"))
 		return
 	}
 	h.setAdminPassword(body.New)
 	h.saveCfg()
 	os.Remove(filepath.Join(h.dir, "admin-password.txt"))
-	h.log.Printf("Password amministratore cambiata")
+	h.log.Printf(T("Password amministratore cambiata"))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -673,6 +694,7 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/admin/api/status", h.withAdmin(h.adminStatus))
 	mux.HandleFunc("/admin/api/devices", h.withAdmin(h.adminDevices))
 	mux.HandleFunc("/admin/api/password", h.withAdmin(h.adminPassword))
+	mux.HandleFunc("/admin/api/lang", h.withAdmin(h.adminLang))
 	mux.HandleFunc("/admin/api/gdrive/config", h.withAdmin(h.gd.apiConfig))
 	mux.HandleFunc("/admin/api/gdrive/auth", h.withAdmin(h.gd.apiAuth))
 	mux.HandleFunc("/admin/api/gdrive/run", h.withAdmin(h.gd.apiRun))
@@ -701,7 +723,7 @@ func (h *Hub) run(ctx context.Context) error {
 		defer cancel()
 		srv.Shutdown(sctx)
 	}()
-	h.log.Printf("Encluca hub %s in ascolto su https://%s (impronta certificato %s…)", Version, h.listen, h.fingerprint[:16])
+	h.log.Printf(T("Encluca hub %s in ascolto su https://%s (impronta certificato %s…)"), Version, h.listen, h.fingerprint[:16])
 	err := srv.ListenAndServeTLS("", "")
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil

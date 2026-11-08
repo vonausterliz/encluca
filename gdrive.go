@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -56,6 +57,7 @@ type GDrive struct {
 	lastChg   time.Time
 	trigger   chan struct{}
 	running   bool
+	prog      *progress // avanzamento del backup in corso (nil se fermo)
 	lastRun   time.Time
 	lastOK    time.Time
 	lastErr   string
@@ -118,7 +120,7 @@ func (g *GDrive) status() map[string]any {
 	return map[string]any{
 		"configured": c.ClientID != "", "authorized": c.RefreshToken != "",
 		"folderName": c.FolderName, "retentionDays": c.RetentionDays, "intervalMin": c.IntervalMin,
-		"clientId": c.ClientID, "running": g.running, "lastRun": g.lastRun, "lastOK": g.lastOK,
+		"clientId": c.ClientID, "running": g.running, "progress": g.prog.snapshot(), "lastRun": g.lastRun, "lastOK": g.lastOK,
 		"lastError": g.lastErr, "lastInfo": g.lastInfo, "pending": g.pending, "dirty": g.dirty,
 	}
 }
@@ -161,16 +163,17 @@ func (g *GDrive) runBackup(ctx context.Context, c GDriveConfig) {
 	up, moved, err := g.backup(ctx, c)
 	g.mu.Lock()
 	g.running = false
+	g.prog = nil
 	if err != nil {
 		g.lastErr = err.Error()
 		g.dirty = true // riprova al prossimo giro
-		g.h.log.Printf("Backup Google Drive fallito: %v", err)
+		g.h.log.Printf(T("Backup Google Drive fallito: %v"), err)
 	} else {
 		g.lastErr = ""
 		g.lastOK = time.Now()
-		g.lastInfo = fmt.Sprintf("%d caricati, %d spostati nelle versioni", up, moved)
+		g.lastInfo = fmt.Sprintf(T("%d caricati, %d spostati nelle versioni"), up, moved)
 		if up+moved > 0 {
-			g.h.log.Printf("Backup Google Drive completato: %s", g.lastInfo)
+			g.h.log.Printf(T("Backup Google Drive completato: %s"), g.lastInfo)
 		}
 	}
 	g.mu.Unlock()
@@ -197,7 +200,7 @@ func (g *GDrive) token(ctx context.Context, c GDriveConfig) (string, error) {
 		return "", err
 	}
 	if out.AccessToken == "" {
-		return "", fmt.Errorf("token Google non ottenuto: %s %s", out.Error, out.Desc)
+		return "", fmt.Errorf(T("token Google non ottenuto: %s %s"), out.Error, out.Desc)
 	}
 	g.mu.Lock()
 	g.access = out.AccessToken
@@ -235,7 +238,7 @@ func (g *GDrive) startDeviceAuth(c GDriveConfig) (map[string]any, error) {
 	}
 	err := g.postForm(context.Background(), "https://oauth2.googleapis.com/device/code", url.Values{"client_id": {c.ClientID}, "scope": {gScope}}, &dc)
 	if err != nil || dc.DeviceCode == "" {
-		return nil, fmt.Errorf("Google ha rifiutato la richiesta: %v %s %s", err, dc.Error, dc.Desc)
+		return nil, fmt.Errorf(T("Google ha rifiutato la richiesta: %v %s %s"), err, dc.Error, dc.Desc)
 	}
 	p := map[string]any{"userCode": dc.UserCode, "url": dc.VerificationURL, "expires": time.Now().Add(time.Duration(dc.ExpiresIn) * time.Second)}
 	g.mu.Lock()
@@ -266,7 +269,7 @@ func (g *GDrive) startDeviceAuth(c GDriveConfig) (map[string]any, error) {
 			default:
 				g.mu.Lock()
 				g.pending = nil
-				g.lastErr = "autorizzazione Google non riuscita: " + tok.Error
+				g.lastErr = T("autorizzazione Google non riuscita: ") + tok.Error
 				g.mu.Unlock()
 				return
 			}
@@ -280,7 +283,7 @@ func (g *GDrive) startDeviceAuth(c GDriveConfig) (map[string]any, error) {
 				g.pending = nil
 				g.lastErr = ""
 				g.mu.Unlock()
-				g.h.log.Printf("Google Drive autorizzato")
+				g.h.log.Printf(T("Google Drive autorizzato"))
 				g.kick()
 				return
 			}
@@ -408,7 +411,7 @@ func (g *GDrive) upload(ctx context.Context, c GDriveConfig, local, name, parent
 	}
 	loc := resp.Header.Get("Location")
 	if loc == "" {
-		return "", errors.New("Drive non ha restituito l'URL di upload")
+		return "", errors.New(T("Drive non ha restituito l'URL di upload"))
 	}
 	var out struct {
 		ID string `json:"id"`
@@ -479,7 +482,7 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 	// struttura cartelle
 	if g.st.RootID != "" {
 		if err := g.jsonCall(ctx, c, http.MethodGet, gDriveAPI+"/files/"+g.st.RootID+"?fields=id,trashed", nil, nil); isNotFound(err) {
-			g.h.log.Printf("Cartella di backup non più presente su Drive: la ricreo")
+			g.h.log.Printf(T("Cartella di backup non più presente su Drive: la ricreo"))
 			g.st = gdState{Folders: map[string]string{}, Files: map[string]*gdFile{}}
 		} else if err != nil {
 			return 0, 0, err
@@ -515,24 +518,52 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 	}
 
 	// istantanea dell'indice
+	type liveFile struct {
+		sha  string
+		size int64
+	}
 	g.h.mu.Lock()
-	live := map[string]string{}
+	live := map[string]liveFile{}
 	for p, e := range g.h.idx.Entries {
 		if !e.Del {
-			live[p] = e.SHA
+			live[p] = liveFile{e.SHA, e.Size}
 		}
 	}
 	g.h.mu.Unlock()
 
+	// elenco del lavoro da fare, per mostrare l'avanzamento
+	var todo []string
+	prog := &progress{}
+	for p, lf := range live {
+		if f := g.st.Files[p]; f == nil || f.SHA != lf.sha {
+			todo = append(todo, p)
+			prog.TotalBytes += lf.size
+		}
+	}
+	for p := range g.st.Files {
+		if _, ok := live[p]; !ok {
+			prog.Total++
+		}
+	}
+	sort.Strings(todo)
+	prog.Total += len(todo)
+	g.mu.Lock()
+	g.prog = prog
+	g.mu.Unlock()
+	advance := func(size int64) {
+		g.mu.Lock()
+		prog.Done++
+		prog.DoneBytes += size
+		g.mu.Unlock()
+	}
+
 	n := 0
-	for p, sha := range live {
+	for _, p := range todo {
 		if ctx.Err() != nil {
 			return uploaded, moved, ctx.Err()
 		}
+		sha, size := live[p].sha, live[p].size
 		f := g.st.Files[p]
-		if f != nil && f.SHA == sha {
-			continue
-		}
 		if f != nil {
 			if err = g.moveToVersions(ctx, c, p, f); err != nil {
 				return
@@ -548,12 +579,14 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		if id, err = g.upload(ctx, c, local, path.Base(p), parent); err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				err = nil // cancellato nel frattempo
+				advance(size)
 				continue
 			}
 			return
 		}
 		g.st.Files[p] = &gdFile{ID: id, SHA: sha, Parent: parent}
 		uploaded++
+		advance(size)
 		if n++; n%20 == 0 {
 			g.saveState()
 		}
@@ -567,6 +600,7 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		}
 		delete(g.st.Files, p)
 		moved++
+		advance(0)
 	}
 	err = g.pruneVersions(ctx, c)
 	return
@@ -594,7 +628,7 @@ func (g *GDrive) pruneVersions(ctx context.Context, c GDriveConfig) error {
 				delete(g.st.Folders, k)
 			}
 		}
-		g.h.log.Printf("Versioni del %s eliminate (più vecchie di %d giorni)", f.Name, c.RetentionDays)
+		g.h.log.Printf(T("Versioni del %s eliminate (più vecchie di %d giorni)"), f.Name, c.RetentionDays)
 	}
 	return nil
 }
@@ -604,7 +638,7 @@ func (g *GDrive) pruneVersions(ctx context.Context, c GDriveConfig) error {
 func (g *GDrive) apiConfig(w http.ResponseWriter, r *http.Request) {
 	var body GDriveConfig
 	if err := readBody(r, &body); err != nil {
-		writeErr(w, http.StatusBadRequest, "dati non validi")
+		writeErr(w, http.StatusBadRequest, T("dati non validi"))
 		return
 	}
 	g.h.mu.Lock()
@@ -633,7 +667,7 @@ func (g *GDrive) apiConfig(w http.ResponseWriter, r *http.Request) {
 func (g *GDrive) apiAuth(w http.ResponseWriter, r *http.Request) {
 	c := g.cfg()
 	if c.ClientID == "" || c.ClientSecret == "" {
-		writeErr(w, http.StatusBadRequest, "inserisci prima Client ID e Client Secret")
+		writeErr(w, http.StatusBadRequest, T("inserisci prima Client ID e Client Secret"))
 		return
 	}
 	p, err := g.startDeviceAuth(c)
@@ -646,7 +680,7 @@ func (g *GDrive) apiAuth(w http.ResponseWriter, r *http.Request) {
 
 func (g *GDrive) apiRun(w http.ResponseWriter, r *http.Request) {
 	if g.cfg().RefreshToken == "" {
-		writeErr(w, http.StatusBadRequest, "Google Drive non è ancora autorizzato")
+		writeErr(w, http.StatusBadRequest, T("Google Drive non è ancora autorizzato"))
 		return
 	}
 	g.kick()
@@ -661,6 +695,6 @@ func (g *GDrive) apiDisconnect(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	g.access = ""
 	g.mu.Unlock()
-	g.h.log.Printf("Google Drive scollegato")
+	g.h.log.Printf(T("Google Drive scollegato"))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

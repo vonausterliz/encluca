@@ -61,6 +61,7 @@ type clientConfig struct {
 	Fingerprint string `json:"fingerprint"`
 	DeviceName  string `json:"deviceName"`
 	WorkDir     string `json:"workDir"`
+	Lang        string `json:"lang,omitempty"` // lingua dell'interfaccia e dei messaggi: "it" | "en"
 }
 
 type plainSnap struct {
@@ -106,6 +107,8 @@ type Client struct {
 	conflicts []string
 	problems  map[string]string
 	renames   map[string]string // elemento troppo lungo (percorso relativo) -> nome suggerito
+	sendProg  *progress         // invio in corso (nil se fermo)
+	recvProg  *progress         // ricezione in corso (nil se ferma)
 	encCache  map[string]string
 	massDel   int // eliminazioni bloccate in attesa di conferma
 	allowDel  bool
@@ -141,6 +144,7 @@ func newClient(dir string) (*Client, error) {
 	if c.cfg.WorkDir == "" {
 		c.cfg.WorkDir = defaultWorkDir()
 	}
+	setLang(c.cfg.Lang)
 	if c.cfg.DeviceName == "" {
 		c.cfg.DeviceName, _ = os.Hostname()
 	}
@@ -168,11 +172,11 @@ func (c *Client) setupHTTP() {
 				InsecureSkipVerify: true,
 				VerifyConnection: func(cs tls.ConnectionState) error {
 					if len(cs.PeerCertificates) == 0 {
-						return errors.New("nessun certificato dal NAS")
+						return errors.New(T("nessun certificato dal NAS"))
 					}
 					sum := sha256.Sum256(cs.PeerCertificates[0].Raw)
 					if hex.EncodeToString(sum[:]) != fp {
-						return errors.New("il certificato del NAS non corrisponde a quello abbinato")
+						return errors.New(T("il certificato del NAS non corrisponde a quello abbinato"))
 					}
 					return nil
 				},
@@ -183,7 +187,7 @@ func (c *Client) setupHTTP() {
 
 func (c *Client) saveState() {
 	if err := saveJSON(c.statePath(), &c.st); err != nil {
-		c.log.Printf("ERRORE salvataggio stato: %v", err)
+		c.log.Printf(T("ERRORE salvataggio stato: %v"), err)
 	}
 }
 
@@ -236,9 +240,9 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 		resp.Body.Close()
 		c.mu.Lock()
 		c.revoked = true
-		c.lastErr = "questo dispositivo è stato revocato dal NAS: abbinalo di nuovo"
+		c.lastErr = T("questo dispositivo è stato revocato dal NAS: abbinalo di nuovo")
 		c.mu.Unlock()
-		return nil, errors.New("dispositivo revocato")
+		return nil, errors.New(T("dispositivo revocato"))
 	}
 	c.setOnline(true, "")
 	if resp.StatusCode >= 300 {
@@ -254,9 +258,9 @@ func (c *Client) setOnline(on bool, msg string) {
 	defer c.mu.Unlock()
 	if on != c.online {
 		if on {
-			c.log.Printf("NAS raggiungibile")
+			c.log.Printf(T("NAS raggiungibile"))
 		} else {
-			c.log.Printf("NAS non raggiungibile: le modifiche restano in coda")
+			c.log.Printf(T("NAS non raggiungibile: le modifiche restano in coda"))
 		}
 	}
 	c.online = on
@@ -405,7 +409,7 @@ func (c *Client) scanFileLocked(enc, rel string, info fs.FileInfo) (bool, error)
 	st.SHA, st.Size, st.MTime = csha, csize, mt
 	st.Pending = "put"
 	st.Plain = &plainSnap{Size: sz, MTime: mt, Hash: phash}
-	c.log.Printf("Modificato: %s", rel)
+	c.log.Printf(T("Modificato: %s"), rel)
 	return true, nil
 }
 
@@ -416,7 +420,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 	}
 	work := c.cfg.WorkDir
 	if _, err := os.Stat(work); err != nil {
-		c.lastErr = "la cartella aperta non esiste più: " + work
+		c.lastErr = T("la cartella aperta non esiste più: ") + work
 		return false, errors.New(c.lastErr)
 	}
 	seen := map[string]bool{}
@@ -451,7 +455,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		rel = filepath.ToSlash(rel)
 		enc, err := c.encPathLocked(rel)
 		if err != nil {
-			c.problems[rel] = "nome troppo lungo per essere cifrato: accorcialo"
+			c.problems[rel] = T("nome troppo lungo per essere cifrato: accorcialo")
 			if errors.Is(err, rcrypt.ErrNameLength) {
 				c.noteLongNameLocked(rel)
 			}
@@ -465,7 +469,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		}
 		ch, err := c.scanFileLocked(enc, rel, info)
 		if err != nil {
-			c.problems[rel] = "non leggibile: " + err.Error()
+			c.problems[rel] = T("non leggibile: ") + err.Error()
 			if firstErr == nil {
 				firstErr = fmt.Errorf("%s: %w", rel, err)
 			}
@@ -501,7 +505,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 	if len(gone) > 20 && len(gone)*2 > live && !c.allowDel {
 		// protezione: molte cancellazioni insieme possono essere un errore (o un ransomware)
 		if c.massDel != len(gone) {
-			c.log.Printf("ATTENZIONE: %d file spariti insieme dalla cartella aperta. Eliminazione sospesa: confermala dall'interfaccia.", len(gone))
+			c.log.Printf(T("ATTENZIONE: %d file spariti insieme dalla cartella aperta. Eliminazione sospesa: confermala dall'interfaccia."), len(gone))
 		}
 		c.massDel = len(gone)
 	} else {
@@ -518,7 +522,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 				st.Pending = "del"
 			}
 			if rel, err := c.cip.DecryptPath(enc); err == nil {
-				c.log.Printf("Eliminato: %s", rel)
+				c.log.Printf(T("Eliminato: %s"), rel)
 			}
 			changed = true
 		}
@@ -534,7 +538,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 func (c *Client) decryptToWorkLocked(enc string, st *fstate) error {
 	rel, err := c.cip.DecryptPath(enc)
 	if err != nil {
-		return fmt.Errorf("nome non decifrabile: %w", err)
+		return fmt.Errorf(T("nome non decifrabile: %w"), err)
 	}
 	src, err := os.Open(c.mirrorPath(enc))
 	if err != nil {
@@ -636,7 +640,7 @@ func (c *Client) resolveConflictLocked(enc string) error {
 	if len(c.conflicts) > 50 {
 		c.conflicts = c.conflicts[:50]
 	}
-	c.log.Printf("CONFLITTO: %s modificato anche altrove. La tua versione è salvata come %q", rel, path.Base(newRel))
+	c.log.Printf(T("CONFLITTO: %s modificato anche altrove. La tua versione è salvata come %q"), rel, path.Base(newRel))
 	return nil
 }
 
@@ -697,7 +701,7 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 		if c.st.Open && c.cip != nil {
 			if rel, err := c.cip.DecryptPath(e.Path); err == nil {
 				os.Remove(filepath.Join(c.cfg.WorkDir, filepath.FromSlash(rel)))
-				c.log.Printf("Eliminato da un altro dispositivo: %s", rel)
+				c.log.Printf(T("Eliminato da un altro dispositivo: %s"), rel)
 			}
 		}
 		c.st.Files[e.Path] = &fstate{Rev: e.Rev, Del: true}
@@ -733,7 +737,7 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	rev, _ := strconv.ParseInt(resp.Header.Get("X-Rev"), 10, 64)
 	sum := hex.EncodeToString(hs.Sum(nil))
 	if sum != resp.Header.Get("X-Sha") {
-		return errors.New("download corrotto, riprovo")
+		return errors.New(T("download corrotto, riprovo"))
 	}
 
 	c.mu.Lock()
@@ -752,9 +756,9 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	c.st.Files[e.Path] = nst
 	if c.st.Open && c.cip != nil {
 		if err := c.decryptToWorkLocked(e.Path, nst); err != nil {
-			c.log.Printf("ERRORE decifratura %s: %v", e.Path, err)
+			c.log.Printf(T("ERRORE decifratura %s: %v"), e.Path, err)
 		} else if rel, err := c.cip.DecryptPath(e.Path); err == nil {
-			c.log.Printf("Aggiornato da un altro dispositivo: %s", rel)
+			c.log.Printf(T("Aggiornato da un altro dispositivo: %s"), rel)
 		}
 	}
 	return nil
@@ -794,16 +798,32 @@ func (c *Client) pullLoop(ctx context.Context) {
 		}
 		backoff = time.Second
 		ok := true
+		if len(res.Entries) > 0 {
+			rp := &progress{Total: len(res.Entries)}
+			for _, e := range res.Entries {
+				rp.TotalBytes += e.Size
+			}
+			c.mu.Lock()
+			c.recvProg = rp
+			c.mu.Unlock()
+		}
 		for _, e := range res.Entries {
 			if err := c.syncEntry(ctx, e); err != nil {
-				c.log.Printf("Sincronizzazione interrotta: %v", err)
+				c.log.Printf(T("Sincronizzazione interrotta: %v"), err)
 				ok = false
 				break
 			}
 			c.mu.Lock()
 			c.st.Seq = e.Seq
+			if c.recvProg != nil {
+				c.recvProg.Done++
+				c.recvProg.DoneBytes += e.Size
+			}
 			c.mu.Unlock()
 		}
+		c.mu.Lock()
+		c.recvProg = nil
+		c.mu.Unlock()
 		c.mu.Lock()
 		if ok {
 			c.st.Seq = max(c.st.Seq, res.Seq)
@@ -883,7 +903,29 @@ func (c *Client) pushOnce(ctx context.Context) {
 		}
 	}
 
-	for _, j := range jobs {
+	// avanzamento: prima di elaborare il job i sono completati i job precedenti
+	if len(jobs) > 0 {
+		var total int64
+		for _, j := range jobs {
+			total += max(j.st.Size, 0)
+		}
+		c.mu.Lock()
+		c.sendProg = &progress{Total: len(jobs), TotalBytes: total}
+		c.mu.Unlock()
+		defer func() {
+			c.mu.Lock()
+			c.sendProg = nil
+			c.mu.Unlock()
+		}()
+	}
+	var sentBytes int64
+	for i, j := range jobs {
+		c.mu.Lock()
+		if c.sendProg != nil {
+			c.sendProg.Done, c.sendProg.DoneBytes = i, sentBytes
+		}
+		c.mu.Unlock()
+		sentBytes += max(j.st.Size, 0)
 		if ctx.Err() != nil {
 			return
 		}
@@ -918,7 +960,7 @@ func (c *Client) pushOnce(ctx context.Context) {
 			case se.Code == http.StatusNotFound && j.st.Pending == "del":
 				delete(c.st.Files, j.enc)
 			default:
-				c.log.Printf("Errore dal NAS: %v", err)
+				c.log.Printf(T("Errore dal NAS: %v"), err)
 			}
 			c.saveState()
 			c.mu.Unlock()
@@ -995,15 +1037,15 @@ func (c *Client) scanLoop(ctx context.Context) {
 func parsePairCode(code string) (u, tok, fp string, err error) {
 	code = strings.TrimSpace(code)
 	if !strings.HasPrefix(code, "EL1-") {
-		return "", "", "", errors.New("codice di abbinamento non valido")
+		return "", "", "", errors.New(T("codice di abbinamento non valido"))
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(code, "EL1-"))
 	if err != nil {
-		return "", "", "", errors.New("codice di abbinamento non valido")
+		return "", "", "", errors.New(T("codice di abbinamento non valido"))
 	}
 	var m map[string]string
 	if json.Unmarshal(raw, &m) != nil || m["t"] == "" || m["f"] == "" {
-		return "", "", "", errors.New("codice di abbinamento non valido")
+		return "", "", "", errors.New(T("codice di abbinamento non valido"))
 	}
 	return m["u"], m["t"], m["f"], nil
 }
@@ -1022,7 +1064,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 	c.mu.Lock()
 	if c.st.Open {
 		c.mu.Unlock()
-		return errors.New("chiudi la cassaforte prima di cambiare NAS")
+		return errors.New(T("chiudi la cassaforte prima di cambiare NAS"))
 	}
 	old := c.cfg
 	c.cfg.HubURL, c.cfg.Token, c.cfg.Fingerprint = strings.TrimRight(u, "/"), tok, fp
@@ -1038,7 +1080,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 		c.cfg = old
 		c.setupHTTP()
 		c.mu.Unlock()
-		return fmt.Errorf("impossibile contattare il NAS: %w", err)
+		return fmt.Errorf(T("impossibile contattare il NAS: %w"), err)
 	}
 	c.mu.Lock()
 	if old.Fingerprint != fp {
@@ -1051,7 +1093,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 	c.revoked = false
 	err = saveJSON(c.cfgPath(), &c.cfg)
 	c.mu.Unlock()
-	c.log.Printf("Abbinato al NAS %s come %q", u, c.cfg.DeviceName)
+	c.log.Printf(T("Abbinato al NAS %s come %q"), u, c.cfg.DeviceName)
 	select {
 	case c.pullReset <- struct{}{}:
 	default:
@@ -1061,7 +1103,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 
 func (c *Client) CreateVault(password string) error {
 	if len(password) < 10 {
-		return errors.New("la password deve avere almeno 10 caratteri")
+		return errors.New(T("la password deve avere almeno 10 caratteri"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1070,7 +1112,7 @@ func (c *Client) CreateVault(password string) error {
 		return err
 	}
 	if m != nil {
-		return errors.New("la cassaforte esiste già: usa Apri")
+		return errors.New(T("la cassaforte esiste già: usa Apri"))
 	}
 	salt := randPassword(32)
 	cip, err := rcrypt.New(password, salt)
@@ -1086,7 +1128,7 @@ func (c *Client) CreateVault(password string) error {
 	}
 	resp.Body.Close()
 	writeFileAtomic(c.metaCache(), b, 0o600)
-	c.log.Printf("Cassaforte creata")
+	c.log.Printf(T("Cassaforte creata"))
 	return c.Open(password)
 }
 
@@ -1107,7 +1149,7 @@ func (c *Client) Open(password string) error {
 		return err
 	}
 	if m == nil {
-		return errors.New("la cassaforte non è ancora stata creata")
+		return errors.New(T("la cassaforte non è ancora stata creata"))
 	}
 	cip, err := rcrypt.New(password, m.Salt)
 	if err != nil {
@@ -1115,7 +1157,7 @@ func (c *Client) Open(password string) error {
 	}
 	chk, _ := base64.StdEncoding.DecodeString(m.Check)
 	if plain, err := cip.Open(chk); err != nil || string(plain) != checkPlain {
-		return errors.New("password errata")
+		return errors.New(T("password errata"))
 	}
 
 	c.mu.Lock()
@@ -1132,7 +1174,7 @@ func (c *Client) Open(password string) error {
 	}
 	if !recovering {
 		if ents, err := os.ReadDir(work); err == nil && len(ents) > 0 {
-			return fmt.Errorf("la cartella %s esiste già e non è vuota: spostala o svuotala", work)
+			return fmt.Errorf(T("la cartella %s esiste già e non è vuota: spostala o svuotala"), work)
 		}
 		for _, st := range c.st.Files {
 			st.Plain = nil
@@ -1157,15 +1199,15 @@ func (c *Client) Open(password string) error {
 		}
 		if err := c.decryptToWorkLocked(enc, st); err != nil {
 			failed++
-			c.log.Printf("ERRORE decifratura di un file: %v", err)
+			c.log.Printf(T("ERRORE decifratura di un file: %v"), err)
 		}
 	}
 	c.st.Open = true
 	c.saveState()
 	if recovering {
-		c.log.Printf("Cassaforte riaperta (ripresa dopo un'interruzione): %s", work)
+		c.log.Printf(T("Cassaforte riaperta (ripresa dopo un'interruzione): %s"), work)
 	} else {
-		c.log.Printf("Cassaforte aperta in %s", work)
+		c.log.Printf(T("Cassaforte aperta in %s"), work)
 	}
 	if failed > 0 {
 		c.lastErr = fmt.Sprintf("%d file non decifrabili (vedi registro)", failed)
@@ -1181,7 +1223,7 @@ func (c *Client) Close() error {
 		open := c.st.Open
 		c.mu.Unlock()
 		if open {
-			return errors.New("la cassaforte era rimasta aperta: inserisci la password e premi Apri, poi chiudi")
+			return errors.New(T("la cassaforte era rimasta aperta: inserisci la password e premi Apri, poi chiudi"))
 		}
 		return nil
 	}
@@ -1189,12 +1231,12 @@ func (c *Client) Close() error {
 	if _, err := c.scanLocked(true); err != nil {
 		c.busy = ""
 		c.mu.Unlock()
-		return fmt.Errorf("non chiudo: %v (chiudi le applicazioni che usano i file e riprova)", err)
+		return fmt.Errorf(T("non chiudo: %v (chiudi le applicazioni che usano i file e riprova)"), err)
 	}
 	if c.massDel > 0 {
 		c.busy = ""
 		c.mu.Unlock()
-		return fmt.Errorf("ci sono %d eliminazioni in attesa di conferma: confermale o ripristina i file prima di chiudere", c.massDel)
+		return fmt.Errorf(T("ci sono %d eliminazioni in attesa di conferma: confermale o ripristina i file prima di chiudere"), c.massDel)
 	}
 	// i file con problemi (nome troppo lungo, illeggibili) esistono solo in chiaro:
 	// chiudere cancellerebbe l'unica copia
@@ -1209,7 +1251,7 @@ func (c *Client) Close() error {
 		}
 		c.busy = ""
 		c.mu.Unlock()
-		return fmt.Errorf("non chiudo: %d file non sono nella cassaforte e andrebbero persi (%s). Rinominali o spostali fuori dalla cartella, poi chiudi", len(c.problems), strings.Join(names, "; "))
+		return fmt.Errorf(T("non chiudo: %d file non sono nella cassaforte e andrebbero persi (%s). Rinominali o spostali fuori dalla cartella, poi chiudi"), len(c.problems), strings.Join(names, "; "))
 	}
 	c.saveState()
 	c.mu.Unlock()
@@ -1233,11 +1275,11 @@ func (c *Client) Close() error {
 	c.st.Open = false
 	c.saveState()
 	if err != nil {
-		c.lastErr = "alcuni file in chiaro non sono stati cancellati: " + err.Error()
+		c.lastErr = T("alcuni file in chiaro non sono stati cancellati: ") + err.Error()
 		c.log.Printf("ATTENZIONE: %s", c.lastErr)
 		return errors.New(c.lastErr)
 	}
-	c.log.Printf("Cassaforte chiusa: cartella in chiaro cancellata")
+	c.log.Printf(T("Cassaforte chiusa: cartella in chiaro cancellata"))
 	return nil
 }
 
@@ -1252,7 +1294,7 @@ func (c *Client) OpenFolder() error {
 	open, work := c.cip != nil, c.cfg.WorkDir
 	c.mu.Unlock()
 	if !open {
-		return errors.New("la cassaforte è chiusa")
+		return errors.New(T("la cassaforte è chiusa"))
 	}
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -1307,20 +1349,32 @@ func (c *Client) Status() map[string]any {
 		"deviceName": c.cfg.DeviceName, "online": c.online, "lastError": c.lastErr, "lastSync": c.lastSync,
 		"open": c.cip != nil, "staleOpen": c.cip == nil && c.st.Open, "workDir": c.cfg.WorkDir,
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
-		"problems": probs, "renames": renames, "massDelete": c.massDel, "busy": c.busy, "vaultKnown": metaErr == nil,
+		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(),
 	}
+}
+
+// SetLang cambia la lingua dell'interfaccia e dei messaggi.
+func (c *Client) SetLang(l string) error {
+	if !validLang(l) {
+		return errors.New("lingua non supportata / unsupported language")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cfg.Lang = l
+	setLang(l)
+	return saveJSON(c.cfgPath(), &c.cfg)
 }
 
 func (c *Client) SetWorkDir(dir string) error {
 	dir = strings.TrimSpace(dir)
 	if dir == "" || !filepath.IsAbs(dir) {
-		return errors.New("indica un percorso assoluto")
+		return errors.New(T("indica un percorso assoluto"))
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.st.Open {
-		return errors.New("chiudi la cassaforte prima di cambiare cartella")
+		return errors.New(T("chiudi la cassaforte prima di cambiare cartella"))
 	}
 	c.cfg.WorkDir = dir
 	return saveJSON(c.cfgPath(), &c.cfg)
@@ -1332,7 +1386,7 @@ func (c *Client) run(ctx context.Context) {
 	go c.scanLoop(ctx)
 	c.mu.Lock()
 	if c.st.Open {
-		c.log.Printf("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi")
+		c.log.Printf(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))
 	}
 	c.mu.Unlock()
 }
@@ -1341,7 +1395,7 @@ func (c *Client) run(ctx context.Context) {
 // (per il pulsante "Sincronizza ora"). La ricezione continua in parallelo nel pullLoop.
 func (c *Client) SyncNow() (map[string]any, error) {
 	if !c.paired() {
-		return nil, errors.New("questo computer non è collegato a un NAS")
+		return nil, errors.New(T("questo computer non è collegato a un NAS"))
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

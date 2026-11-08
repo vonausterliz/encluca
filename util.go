@@ -203,3 +203,20 @@ func markFolder(dir string) {
 		os.WriteFile(filepath.Join(dir, ".directory"), []byte("[Desktop Entry]\nIcon=folder-important\nComment=Encluca: cartella DECRIPTATA\n"), 0o600)
 	}
 }
+
+// progress descrive l'avanzamento di un'operazione su più file (invio, ricezione, backup).
+type progress struct {
+	Done       int   `json:"done"`
+	Total      int   `json:"total"`
+	DoneBytes  int64 `json:"doneBytes"`
+	TotalBytes int64 `json:"totalBytes"`
+}
+
+// snapshot restituisce una copia (da serializzare fuori dal lock), o nil.
+func (p *progress) snapshot() *progress {
+	if p == nil {
+		return nil
+	}
+	c := *p
+	return &c
+}

@@ -114,3 +114,17 @@ ol{margin:0 0 12px;padding-left:20px;max-width:80ch} ol li{margin:4px 0}
   .grid2{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* menu a tendina, icone nei pulsanti */
+select{font:inherit;padding:9px 12px;border-radius:var(--r);border:1px solid var(--alt2);background:var(--bg1);color:var(--fg1)}
+select.small{padding:4px 8px;font-size:13px}
+button .ic{width:18px;height:18px;flex:none}
+button.with-ic{display:inline-flex;align-items:center;gap:8px}
+.spinning .ic{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* barre di avanzamento */
+.prog{margin-top:14px}
+.prog .lbl{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--fg2);margin-bottom:5px;font-variant-numeric:tabular-nums}
+.prog .track{height:6px;border-radius:3px;background:var(--alt1);overflow:hidden}
+.prog .fill{height:100%;background:var(--primary);border-radius:3px;transition:width .4s}

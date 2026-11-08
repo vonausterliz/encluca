@@ -90,7 +90,7 @@ ul.alerts li:last-child{border-bottom:0}
 
     <div class="grid2 hidden" id="panels" style="margin-bottom:16px">
       <div class="card">
-        <div class="card-header"><h2>Sincronizzazione</h2><button class="ghost small" id="syncBtn">Sincronizza ora</button></div>
+        <div class="card-header"><h2>Sincronizzazione</h2><button class="primary with-ic" id="syncBtn"><svg class="ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 4V1L8 5l4 4V6a6 6 0 0 1 5.2 9l1.5 1.5A8 8 0 0 0 12 4m0 14a6 6 0 0 1-5.2-9L5.3 7.5A8 8 0 0 0 12 20v3l4-4-4-4z"/></svg><span id="syncLbl">Sincronizza ora</span></button></div>
         <div class="card-body">
           <dl>
             <dt>NAS</dt><dd id="sNas"></dd>
@@ -98,6 +98,7 @@ ul.alerts li:last-child{border-bottom:0}
             <dt>In coda</dt><dd id="sPending"></dd>
             <dt>Ultimo allineamento</dt><dd id="sLast"></dd>
           </dl>
+          <div id="progs"></div>
         </div>
       </div>
       <div class="card">
@@ -116,36 +117,88 @@ ul.alerts li:last-child{border-bottom:0}
       </div>
     </div>
 
-    <div class="card hidden" id="settings">
+    <div class="card" id="settings">
       <div class="card-header"><h2>Impostazioni</h2></div>
       <div class="card-body">
-        <label for="workDir" style="margin-top:0">Cartella in cui aprire la cassaforte</label>
+        <label for="langSel" style="margin-top:0">Lingua / Language</label>
+        <select id="langSel"><option value="it">Italiano</option><option value="en">English</option></select>
+        <div id="vaultSettings">
+        <label for="workDir">Cartella in cui aprire la cassaforte</label>
         <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
         <label>NAS collegato</label>
         <div id="hubInfo" style="color:var(--fg1)"></div>
         <div class="row" style="margin-top:12px"><button class="ghost" id="repairBtn">Collega a un altro NAS</button></div>
+        </div>
         <div class="msg" id="setMsg"></div>
       </div>
     </div>
 
     <div class="card" id="registro">
       <div class="card-header"><h2>Registro attività</h2></div>
-      <div class="card-body"><pre class="log" id="log"></pre></div>
+      <div class="card-body"><pre class="log" id="log" data-noi18n></pre></div>
     </div>
   </main>
 </div>
 <script>
 const $ = id => document.getElementById(id);
+/*I18N*/
+const EN = {
+ // statici
+ 'Cassaforte aperta: i file sono in chiaro in':'Vault open: files are in plaintext in','Sezioni':'Sections','Cassaforte':'Vault','Sincronizzazione':'Sync',
+ 'Impostazioni':'Settings','Registro':'Log','encluca › Questo computer':'encluca › This computer','Collega questo computer al NAS':'Pair this computer with the NAS',
+ 'Non collegato':'Not paired',"Sul NAS apri l'interfaccia di encluca, premi":'On the NAS open the encluca interface, press','Aggiungi dispositivo':'Add device',
+ 'e incolla qui il codice che compare.':'and paste here the code it shows.','Codice di abbinamento':'Pairing code','Nome di questo computer':'Name of this computer',
+ 'Indirizzo del NAS (facoltativo, se diverso da quello nel codice)':'NAS address (optional, if different from the one in the code)','Collega':'Pair',
+ 'Stato':'Status','Chiusa':'Closed','Cassaforte chiusa':'Vault closed','Password della cassaforte':'Vault password','Ripeti la password':'Repeat the password',
+ 'Apri':'Open','Mostra i file':'Show files','Chiudi la cassaforte':'Close the vault','Sincronizza ora':'Sync now','File':'Files','In coda':'Queued',
+ 'Ultimo allineamento':'Last sync','Avvisi':'Notices',"Conferma l'eliminazione":'Confirm deletion',
+ 'Nomi troppo lunghi per essere cifrati: questi elementi non sono nella cassaforte. Accetta il nome proposto o modificalo.':'Names too long to be encrypted: these items are not in the vault. Accept the suggested name or edit it.',
+ 'Cartella in cui aprire la cassaforte':'Folder where the vault opens','Salva':'Save','NAS collegato':'Paired NAS','Collega a un altro NAS':'Pair with another NAS',
+ 'Registro attività':'Activity log',
+ // dinamici
+ 'mai':'never','adesso':'just now','{n} min fa':'{n} min ago','Aperta':'Open','Cassaforte aperta':'Vault open',
+ 'I file sono in chiaro in <code></code>. Ogni modifica viene cifrata e inviata al NAS. Chiudila quando hai finito.':'Files are in plaintext in <code></code>. Every change is encrypted and sent to the NAS. Close it when you are done.',
+ 'Rimasta aperta':'Left open','Cassaforte rimasta aperta':'Vault left open',
+ 'Il servizio è stato riavviato con la cassaforte aperta: i file in chiaro sono ancora sul disco. Inserisci la password per riprendere, poi chiudila.':'The service restarted while the vault was open: the plaintext files are still on disk. Enter the password to resume, then close it.',
+ 'Riprendi':'Resume','Da creare':'To create','Crea la cassaforte':'Create the vault',
+ 'Scegli la password che userai su tutti i tuoi computer. Non è recuperabile: se la perdi, i dati restano illeggibili per sempre.':'Choose the password you will use on all your computers. It cannot be recovered: if you lose it, the data stays unreadable forever.',
+ 'Crea e apri':'Create and open',
+ 'Sul disco ci sono solo dati cifrati. La sincronizzazione con il NAS continua anche a cassaforte chiusa.':'Only encrypted data is on disk. Sync with the NAS continues while the vault is closed.',
+ 'Decifratura in corso…':'Decrypting…','Cifratura e chiusura in corso…':'Encrypting and closing…','Raggiungibile':'Reachable','Non raggiungibile':'Unreachable',
+ '{n} in invio':'{n} sending','{n} in attesa del NAS':'{n} waiting for the NAS','nulla':'nothing',
+ '{n} conflitti da risolvere: apri la cassaforte':'{n} conflicts to resolve: open the vault','Conflitto: la tua versione è salvata come “{f}”':'Conflict: your version is saved as “{f}”',
+ 'Nessun avviso.':'No notices.',
+ '{n} file sono spariti tutti insieme dalla cartella aperta. Se li hai cancellati tu, conferma; altrimenti ripristinali.':'{n} files disappeared at once from the open folder. If you deleted them, confirm; otherwise restore them.',
+ 'nessuno':'none','Nuovo nome':'New name','Rinomina':'Rename','Cartella:':'Folder:','File:':'File:','Apri la cassaforte per rinominare.':'Open the vault to rename.',
+ 'Il servizio encluca non risponde.':'The encluca service is not responding.','Collegamento…':'Pairing…','Le due password non coincidono.':'The two passwords do not match.',
+ 'Creazione…':'Creating…','Apertura…':'Opening…','Chiusura…':'Closing…','Chiusa. La cartella in chiaro è stata cancellata.':'Closed. The plaintext folder has been deleted.',
+ 'Salvato.':'Saved.','errore':'error','Sincronizzazione…':'Syncing…','NAS non raggiungibile: modifiche in coda':'NAS unreachable: changes queued',
+ '{n} file ancora in invio':'{n} files still sending','Allineato alle {h}':'In sync at {h}',
+ '{d} di {n} file':'{d} of {n} files','Invio al NAS':'Sending to the NAS','Ricezione dal NAS':'Receiving from the NAS',
+ 'Lingua / Language':'Lingua / Language','Italiano':'Italiano','English':'English',
+};
 let S = null, forcePair = false;
 async function api(path, body){
   const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Encluca':'1'}, body:JSON.stringify(body)});
   const j = await r.json().catch(()=>({}));
-  if(!r.ok) throw new Error(j.error || ('errore ' + r.status));
+  if(!r.ok) throw new Error(j.error || (t('errore') + ' ' + r.status));
   return j;
 }
-function when(t){ if(!t || t.startsWith('0001')) return 'mai'; const d=new Date(t); const s=(Date.now()-d)/1000;
-  if(s<60) return 'adesso'; if(s<3600) return Math.floor(s/60)+' min fa'; return d.toLocaleString('it-IT'); }
+function when(x){ if(!x || x.startsWith('0001')) return t('mai'); const d=new Date(x); const s=(Date.now()-d)/1000;
+  if(s<60) return t('adesso'); if(s<3600) return t('{n} min fa',{n:Math.floor(s/60)}); return d.toLocaleString(LOCALE()); }
 function busy(btn, on){ btn.disabled = on; }
+const size = b => { const u=['B','KB','MB','GB','TB']; let i=0; while(b>=1024 && i<u.length-1){b/=1024;i++} return (i?b.toFixed(1):b)+' '+u[i]; };
+// barra di avanzamento: titolo, "x di y file · a di b"
+function progHTML(title, p){
+  const pct = p.totalBytes > 0 ? 100*p.doneBytes/p.totalBytes : (p.total ? 100*p.done/p.total : 0);
+  const d = document.createElement('div'); d.className = 'prog';
+  d.innerHTML = '<div class="lbl"><span></span><span></span></div><div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>';
+  d.querySelector('.lbl span').textContent = title;
+  d.querySelector('.lbl span:last-child').textContent = t('{d} di {n} file', {d:p.done, n:p.total}) + (p.totalBytes ? ' · ' + size(p.doneBytes) + ' / ' + size(p.totalBytes) : '');
+  d.querySelector('.track').setAttribute('aria-valuenow', Math.round(pct));
+  d.querySelector('.fill').style.width = Math.min(100, pct).toFixed(1) + '%';
+  return d;
+}
 const chip = (cls, text) => '<span class="chip '+cls+'">'+text+'</span>';
 
 function render(){
@@ -154,10 +207,11 @@ function render(){
   const needPair = !s.paired || s.revoked || forcePair;
   $('pairBox').classList.toggle('hidden', !needPair);
   if(needPair && !$('pairName').value) $('pairName').value = s.deviceName || '';
-  for(const id of ['door','panels','settings']) $(id).classList.toggle('hidden', needPair && !s.vaultKnown);
+  for(const id of ['door','panels','vaultSettings']) $(id).classList.toggle('hidden', needPair && !s.vaultKnown);
+  if(s.lang && s.lang !== LANG) setLangUI(s.lang);
   if(s.revoked) $('pairMsg').textContent = s.lastError;
 
-  const open = s.open || s.staleOpen;
+  const open = !!(s.open || s.staleOpen);
   $('door').classList.toggle('open', open);
   $('openBanner').classList.toggle('hidden', !s.open);
   $('bannerDir').textContent = s.workDir;
@@ -168,50 +222,54 @@ function render(){
   $('openCtl').classList.toggle('hidden', !s.open);
   const dc = $('doorChip');
   if(s.open){
-    dc.className='chip wait'; dc.textContent='Aperta';
-    $('doorTitle').textContent = 'Cassaforte aperta';
-    $('doorText').innerHTML = 'I file sono in chiaro in <code></code>. Ogni modifica viene cifrata e inviata al NAS. Chiudila quando hai finito.';
+    dc.className='chip wait'; dc.textContent=t('Aperta');
+    $('doorTitle').textContent = t('Cassaforte aperta');
+    $('doorText').innerHTML = t('I file sono in chiaro in <code></code>. Ogni modifica viene cifrata e inviata al NAS. Chiudila quando hai finito.');
     $('doorText').querySelector('code').textContent = s.workDir;
   } else if(s.staleOpen){
-    dc.className='chip wait'; dc.textContent='Rimasta aperta';
-    $('doorTitle').textContent = 'Cassaforte rimasta aperta';
-    $('doorText').textContent = 'Il servizio è stato riavviato con la cassaforte aperta: i file in chiaro sono ancora sul disco. Inserisci la password per riprendere, poi chiudila.';
-    $('openBtn').textContent = 'Riprendi';
+    dc.className='chip wait'; dc.textContent=t('Rimasta aperta');
+    $('doorTitle').textContent = t('Cassaforte rimasta aperta');
+    $('doorText').textContent = t('Il servizio è stato riavviato con la cassaforte aperta: i file in chiaro sono ancora sul disco. Inserisci la password per riprendere, poi chiudila.');
+    $('openBtn').textContent = t('Riprendi');
   } else if(creating){
-    dc.className='chip info'; dc.textContent='Da creare';
-    $('doorTitle').textContent = 'Crea la cassaforte';
-    $('doorText').textContent = 'Scegli la password che userai su tutti i tuoi computer. Non è recuperabile: se la perdi, i dati restano illeggibili per sempre.';
-    $('openBtn').textContent = 'Crea e apri';
+    dc.className='chip info'; dc.textContent=t('Da creare');
+    $('doorTitle').textContent = t('Crea la cassaforte');
+    $('doorText').textContent = t('Scegli la password che userai su tutti i tuoi computer. Non è recuperabile: se la perdi, i dati restano illeggibili per sempre.');
+    $('openBtn').textContent = t('Crea e apri');
   } else {
-    dc.className='chip ok'; dc.textContent='Chiusa';
-    $('doorTitle').textContent = 'Cassaforte chiusa';
-    $('doorText').textContent = 'Sul disco ci sono solo dati cifrati. La sincronizzazione con il NAS continua anche a cassaforte chiusa.';
-    $('openBtn').textContent = 'Apri';
+    dc.className='chip ok'; dc.textContent=t('Chiusa');
+    $('doorTitle').textContent = t('Cassaforte chiusa');
+    $('doorText').textContent = t('Sul disco ci sono solo dati cifrati. La sincronizzazione con il NAS continua anche a cassaforte chiusa.');
+    $('openBtn').textContent = t('Apri');
   }
-  if(s.busy) $('doorMsg').textContent = s.busy === 'apertura' ? 'Decifratura in corso…' : 'Cifratura e chiusura in corso…';
+  if(s.busy) $('doorMsg').textContent = s.busy === 'apertura' ? t('Decifratura in corso…') : t('Cifratura e chiusura in corso…');
 
-  $('sNas').innerHTML = s.paired ? (s.online ? chip('ok','Raggiungibile') : chip('ko','Non raggiungibile')) : chip('wait','Non collegato');
+  $('sNas').innerHTML = s.paired ? (s.online ? chip('ok',t('Raggiungibile')) : chip('ko',t('Non raggiungibile'))) : chip('wait',t('Non collegato'));
   $('sFiles').textContent = s.files;
-  $('sPending').textContent = s.pending ? s.pending + (s.online ? ' in invio' : ' in attesa del NAS') : 'nulla';
+  $('sPending').textContent = s.pending ? t(s.online ? '{n} in invio' : '{n} in attesa del NAS', {n:s.pending}) : t('nulla');
   $('sLast').textContent = when(s.lastSync);
+  const pb = $('progs'); pb.innerHTML = '';
+  if(s.sendProgress) pb.append(progHTML(t('Invio al NAS'), s.sendProgress));
+  if(s.recvProgress) pb.append(progHTML(t('Ricezione dal NAS'), s.recvProgress));
 
   const items = [];
   if(s.lastError && !s.revoked) items.push(['warn-text', s.lastError]);
-  if(s.deferredConflicts) items.push(['', s.deferredConflicts + ' conflitti da risolvere: apri la cassaforte']);
-  for(const c of (s.conflicts||[])) items.push(['', 'Conflitto: la tua versione è salvata come “' + c + '”']);
+  if(s.deferredConflicts) items.push(['', t('{n} conflitti da risolvere: apri la cassaforte', {n:s.deferredConflicts})]);
+  for(const c of (s.conflicts||[])) items.push(['', t('Conflitto: la tua versione è salvata come “{f}”', {f:c})]);
   for(const p of (s.problems||[])) items.push(['warn-text', p]);
   $('alerts').innerHTML = '';
-  if(!items.length && !(s.renames||[]).length){ const li=document.createElement('li'); li.className='empty'; li.textContent='Nessun avviso.'; $('alerts').append(li); }
-  for(const [cls, t] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=t; $('alerts').append(li); }
+  if(!items.length && !(s.renames||[]).length){ const li=document.createElement('li'); li.className='empty'; li.textContent=t('Nessun avviso.'); $('alerts').append(li); }
+  for(const [cls, txt] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=txt; $('alerts').append(li); }
   $('massBox').classList.toggle('hidden', !s.massDelete);
   renderRenames(s.renames || [], s.open);
-  $('massText').textContent = s.massDelete + ' file sono spariti tutti insieme dalla cartella aperta. Se li hai cancellati tu, conferma; altrimenti ripristinali.';
+  $('massText').textContent = t('{n} file sono spariti tutti insieme dalla cartella aperta. Se li hai cancellati tu, conferma; altrimenti ripristinali.', {n:s.massDelete});
 
   if(document.activeElement !== $('workDir')) $('workDir').value = s.workDir;
-  $('hubInfo').textContent = s.paired ? s.hubUrl : 'nessuno';
+  $('hubInfo').textContent = s.paired ? s.hubUrl : t('nessuno');
   $('log').textContent = (s.log||[]).join('\n');
 }
 let renKey = null;
+function onLangChange(){ renKey = null; if(S) render(); }
 function renderRenames(list, open){
   const key = JSON.stringify([open, list]);
   if(key === renKey) return; // invariato: non toccare i campi che l'utente sta modificando
@@ -220,12 +278,12 @@ function renderRenames(list, open){
   const box = $('renames'); box.innerHTML = '';
   for(const r of list){
     const d = document.createElement('div'); d.className = 'ren';
-    d.innerHTML = '<div class="old"><b></b> <span></span></div><div class="row"><input aria-label="Nuovo nome"><button class="primary small">Rinomina</button></div><div class="msg"></div>';
-    d.querySelector('b').textContent = r.dir ? 'Cartella:' : 'File:';
+    d.innerHTML = '<div class="old"><b></b> <span></span></div><div class="row"><input aria-label="'+t('Nuovo nome')+'"><button class="primary small">'+t('Rinomina')+'</button></div><div class="msg"></div>';
+    d.querySelector('b').textContent = r.dir ? t('Cartella:') : t('File:');
     d.querySelector('span').textContent = r.path;
     const inp = d.querySelector('input'), btn = d.querySelector('button'), msg = d.querySelector('.msg');
     inp.value = r.suggest;
-    btn.disabled = !open; if(!open) msg.textContent = 'Apri la cassaforte per rinominare.';
+    btn.disabled = !open; if(!open) msg.textContent = t('Apri la cassaforte per rinominare.');
     const go = async () => { btn.disabled = true; msg.textContent = '';
       try{ await api('/api/rename', {Path:r.path, Name:inp.value}); renKey = null; refresh(); }
       catch(e){ msg.textContent = e.message; btn.disabled = false; } };
@@ -233,7 +291,7 @@ function renderRenames(list, open){
     box.append(d);
   }
 }
-async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = 'Il servizio encluca non risponde.'; } }
+async function refresh(){ try{ S = await api('/api/status'); render(); }catch(e){ $('doorMsg').textContent = t('Il servizio encluca non risponde.'); } }
 
 // voce attiva nel menu laterale in base alla sezione visibile
 const links = [...document.querySelectorAll('.sidenav a')];
@@ -242,34 +300,38 @@ const io = new IntersectionObserver(es => { for(const e of es) if(e.isIntersecti
 for(const id of ['door','panels','settings','registro']) io.observe($(id));
 markActive('door');
 
-$('pairBtn').onclick = async () => { busy($('pairBtn'),true); $('pairMsg').textContent='Collegamento…';
+$('pairBtn').onclick = async () => { busy($('pairBtn'),true); $('pairMsg').textContent=t('Collegamento…');
   try{ await api('/api/pair',{Code:$('pairCode').value, Name:$('pairName').value, HubURL:$('pairUrl').value}); $('pairMsg').textContent=''; $('pairCode').value=''; forcePair=false; }
   catch(e){ $('pairMsg').textContent=e.message; } busy($('pairBtn'),false); refresh(); };
 $('openBtn').onclick = async () => {
   const creating = !$('pw2').classList.contains('hidden');
-  if(creating && $('pw').value !== $('pw2').value){ $('doorMsg').textContent='Le due password non coincidono.'; return; }
-  busy($('openBtn'),true); $('doorMsg').textContent = creating ? 'Creazione…' : 'Apertura…';
+  if(creating && $('pw').value !== $('pw2').value){ $('doorMsg').textContent=t('Le due password non coincidono.'); return; }
+  busy($('openBtn'),true); $('doorMsg').textContent = creating ? t('Creazione…') : t('Apertura…');
   try{ await api(creating ? '/api/create' : '/api/open', {Password:$('pw').value}); $('pw').value=''; $('pw2').value=''; $('doorMsg').textContent=''; }
   catch(e){ $('doorMsg').textContent=e.message; } busy($('openBtn'),false); refresh(); };
 $('pw').addEventListener('keydown', e => { if(e.key==='Enter' && $('pw2').classList.contains('hidden')) $('openBtn').click(); });
-$('closeBtn').onclick = async () => { busy($('closeBtn'),true); $('doorMsg').textContent='Chiusura…';
-  try{ await api('/api/close',{}); $('doorMsg').textContent='Chiusa. La cartella in chiaro è stata cancellata.'; }
+$('closeBtn').onclick = async () => { busy($('closeBtn'),true); $('doorMsg').textContent=t('Chiusura…');
+  try{ await api('/api/close',{}); $('doorMsg').textContent=t('Chiusa. La cartella in chiaro è stata cancellata.'); }
   catch(e){ $('doorMsg').textContent=e.message; } busy($('closeBtn'),false); refresh(); };
 $('folderBtn').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
 $('syncBtn').onclick = async () => {
-  const btn = $('syncBtn'); btn.disabled = true; btn.textContent = 'Sincronizzazione…';
+  const btn = $('syncBtn'), lbl = $('syncLbl'); btn.disabled = true; btn.classList.add('spinning'); lbl.textContent = t('Sincronizzazione…');
   let msg;
   try{
     const r = await api('/api/sync',{});
-    if(!r.online) msg = 'NAS non raggiungibile: modifiche in coda';
-    else if(r.pending) msg = r.pending + ' file ancora in invio';
-    else msg = 'Allineato alle ' + new Date(r.lastSync).toLocaleTimeString('it-IT');
+    if(!r.online) msg = t('NAS non raggiungibile: modifiche in coda');
+    else if(r.pending) msg = t('{n} file ancora in invio', {n:r.pending});
+    else msg = t('Allineato alle {h}', {h:new Date(r.lastSync).toLocaleTimeString(LOCALE())});
   }catch(e){ msg = e.message; }
-  btn.textContent = msg; refresh();
-  setTimeout(() => { btn.textContent = 'Sincronizza ora'; btn.disabled = false; }, 4000);
+  btn.classList.remove('spinning'); lbl.textContent = msg; refresh();
+  setTimeout(() => { lbl.textContent = t('Sincronizza ora'); btn.disabled = false; }, 4000);
+};
+$('langSel').onchange = async () => {
+  const l = $('langSel').value;
+  try{ await api('/api/lang', {Lang:l}); setLangUI(l); refresh(); }catch(e){ $('setMsg').textContent = e.message; }
 };
 $('massBtn').onclick = () => api('/api/confirm-deletes',{}).then(refresh);
-$('workBtn').onclick = () => api('/api/workdir',{Dir:$('workDir').value}).then(()=>$('setMsg').textContent='Salvato.').catch(e=>$('setMsg').textContent=e.message);
+$('workBtn').onclick = () => api('/api/workdir',{Dir:$('workDir').value}).then(()=>$('setMsg').textContent=t('Salvato.')).catch(e=>$('setMsg').textContent=e.message);
 $('repairBtn').onclick = () => { forcePair = true; render(); $('pairCode').focus(); };
 refresh(); setInterval(refresh, 2000);
 </script>

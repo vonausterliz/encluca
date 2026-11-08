@@ -107,27 +107,27 @@ func (c *Client) Rename(comp, name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.cip == nil {
-		return errors.New("apri la cassaforte per rinominare")
+		return errors.New(T("apri la cassaforte per rinominare"))
 	}
 	if _, ok := c.renames[comp]; !ok {
-		return errors.New("questo elemento non è più da rinominare")
+		return errors.New(T("questo elemento non è più da rinominare"))
 	}
 	name = strings.TrimSpace(name)
 	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) || strings.ContainsRune(name, 0) {
-		return errors.New("nome non valido: niente barre e non vuoto")
+		return errors.New(T("nome non valido: niente barre e non vuoto"))
 	}
 	if !c.segmentFitsLocked(name) {
-		return errors.New("anche questo nome è troppo lungo: accorcialo ancora")
+		return errors.New(T("anche questo nome è troppo lungo: accorcialo ancora"))
 	}
 	if c.nameTakenLocked(path.Dir(comp), name, comp) {
-		return fmt.Errorf("esiste già un elemento chiamato %q nella cassaforte: scegli un altro nome", name)
+		return fmt.Errorf(T("esiste già un elemento chiamato %q nella cassaforte: scegli un altro nome"), name)
 	}
 	from := filepath.Join(c.cfg.WorkDir, filepath.FromSlash(comp))
 	to := filepath.Join(filepath.Dir(from), name)
 	if err := os.Rename(from, to); err != nil {
 		return err
 	}
-	c.log.Printf("Rinominato: %s → %s", path.Base(comp), name)
+	c.log.Printf(T("Rinominato: %s → %s"), path.Base(comp), name)
 	if changed, _ := c.scanLocked(false); changed {
 		c.saveState()
 		go c.kick()

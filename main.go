@@ -20,18 +20,20 @@ import (
 
 var Version = "0.1.3"
 
-//go:embed web/*.html web/*.css
+//go:embed web/*.html web/*.css web/*.js
 var webFS embed.FS
 
-// serveUI invia la pagina con il tema comune (web/theme.css) incluso al posto del segnaposto.
+// serveUI invia la pagina con tema (web/theme.css) e traduzioni (web/i18n.js) inclusi al posto dei segnaposto.
 func serveUI(w http.ResponseWriter, name string) {
 	b, err := webFS.ReadFile(name)
 	css, err2 := webFS.ReadFile("web/theme.css")
-	if err != nil || err2 != nil {
+	js, err3 := webFS.ReadFile("web/i18n.js")
+	if err != nil || err2 != nil || err3 != nil {
 		http.Error(w, "interfaccia non trovata", 500)
 		return
 	}
 	b = bytes.Replace(b, []byte("/*THEME*/"), css, 1)
+	b = bytes.Replace(b, []byte("/*I18N*/"), js, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b)
@@ -118,7 +120,7 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 		return err
 	}
 	if ip := net.ParseIP(host); host != "localhost" && (ip == nil || !ip.IsLoopback()) {
-		return errors.New("l'interfaccia del client può ascoltare solo su 127.0.0.1/localhost")
+		return errors.New(T("l'interfaccia del client può ascoltare solo su 127.0.0.1/localhost"))
 	}
 	c, err := newClient(dir)
 	if err != nil {
@@ -128,7 +130,7 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandler(uiAddr)), ReadHeaderTimeout: 10 * time.Second}
 	errc := make(chan error, 1)
 	go func() { errc <- srv.ListenAndServe() }()
-	c.log.Printf("Encluca %s avviato: apri http://%s", Version, uiAddr)
+	c.log.Printf(T("Encluca %s avviato: apri http://%s"), Version, uiAddr)
 	select {
 	case err := <-errc:
 		return err
@@ -139,9 +141,9 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	open := c.cip != nil
 	c.mu.Unlock()
 	if open {
-		c.log.Printf("Arresto del servizio: chiudo la cassaforte")
+		c.log.Printf(T("Arresto del servizio: chiudo la cassaforte"))
 		if err := c.Close(); err != nil {
-			c.log.Printf("Chiusura all'arresto non riuscita: %v", err)
+			c.log.Printf(T("Chiusura all'arresto non riuscita: %v"), err)
 		}
 	}
 	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -157,7 +159,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	post := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.Header.Get("X-Encluca") != "1" {
-				writeErr(w, http.StatusForbidden, "richiesta non valida")
+				writeErr(w, http.StatusForbidden, T("richiesta non valida"))
 				return
 			}
 			res, err := fn(r)
@@ -172,7 +174,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 		}
 	}
 	type body struct {
-		Password, Code, HubURL, Name, Dir, Path string
+		Password, Code, HubURL, Name, Dir, Path, Lang string
 	}
 	parse := func(r *http.Request) body {
 		var b body
@@ -188,6 +190,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	mux.HandleFunc("/api/open", post(func(r *http.Request) (any, error) { return nil, c.Open(parse(r).Password) }))
 	mux.HandleFunc("/api/close", post(func(r *http.Request) (any, error) { return nil, c.Close() }))
 	mux.HandleFunc("/api/openfolder", post(func(r *http.Request) (any, error) { return nil, c.OpenFolder() }))
+	mux.HandleFunc("/api/lang", post(func(r *http.Request) (any, error) { return nil, c.SetLang(parse(r).Lang) }))
 	mux.HandleFunc("/api/rename", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.Rename(b.Path, b.Name) }))
 	mux.HandleFunc("/api/confirm-deletes", post(func(r *http.Request) (any, error) { c.ConfirmDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
