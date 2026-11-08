@@ -16,16 +16,19 @@ Il container:
 
 Per tornare indietro basta eliminare l'app e il dataset: vedi [Disinstallare](#disinstallare).
 
-Nei comandi che seguono, sostituisci:
-- `NOMEPOOL` con il nome del tuo pool;
-- `IP-DEL-NAS` con l'indirizzo IP del NAS.
+> ⚠️ **`NOMEPOOL` è un segnaposto: va sostituito ovunque**, sia nei comandi della Shell sia nel YAML, con il nome reale del tuo pool (vedi 0.1). Lo stesso vale per `IP-DEL-NAS`.
+> Se nel YAML resta `NOMEPOOL`, Docker crea da solo una cartella vuota `/mnt/NOMEPOOL` e l'app si ferma con `stat /app/encluca: no such file or directory`. Vedi [Problemi comuni](#problemi-comuni).
 
 ---
 
 ## Passo 0 – Controlli preliminari (non modificano nulla)
 
 **0.1 Nome del pool**
-Vai in *Storage* e annota il nome del pool sotto cui vuoi mettere i dati, ad esempio `tank`.
+Vai in *Storage*, oppure esegui nella Shell:
+```
+zpool list -H -o name
+```
+Scegli il pool dei dati, ad esempio `tank`. **Non** usare `boot-pool`, che è il pool di sistema.
 
 **0.2 App già configurate**
 Vai in *Apps*.
@@ -164,7 +167,7 @@ L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGG
 |---|---|---|
 | L'app resta in *Deploying* o va in *Crashed*, e nei log c'è `permission denied` | permessi delle cartelle | ripeti il `chown` del passo 2 e controlla con `ls -ln` |
 | Nei log: `address already in use` | porta 8443 occupata | *Apps → encluca → Edit*, cambia la porta in `"18443:8443"` |
-| Nei log: `/app/encluca: not found` | percorso `bin` errato nel YAML o binario non copiato | controlla `ls -l /mnt/NOMEPOOL/encluca/bin` e le righe `volumes` |
+| `stat /app/encluca: no such file or directory` | nel YAML è rimasto `NOMEPOOL`, il percorso è sbagliato o il binario non è stato copiato | elimina l'app, rimuovi la cartella creata per errore con `sudo rmdir` (si rifiuta se non è vuota), correggi il percorso e reinstalla |
 | Il browser non si connette | indirizzo o porta sbagliati | usa `https://` (non `http://`) e la porta scelta |
 
 ## Aggiornare a una nuova versione
