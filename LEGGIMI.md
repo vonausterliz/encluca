@@ -29,6 +29,8 @@ Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio
 
 ### 1. NAS (TrueNAS Community Edition)
 
+> Guida dettagliata passo per passo, con controlli e disinstallazione: [docs/INSTALLA-TRUENAS.md](docs/INSTALLA-TRUENAS.md).
+
 1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/encluca`, con le sottocartelle `bin` e `data`.
 2. Copia in `bin` il file `encluca` del pacchetto **linux-amd64**.
 3. Assegna all'utente `apps` (uid 568) **solo** le cartelle nuove, senza `-R`:
