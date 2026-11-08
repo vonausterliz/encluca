@@ -235,3 +235,67 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Un file che non può essere cifrato (es. nome troppo lungo) esiste solo in chiaro:
+// la chiusura deve rifiutarsi, altrimenti cancellerebbe l'unica copia.
+func TestCloseKeepsUnencryptableFiles(t *testing.T) {
+	env := newTestEnv(t)
+	pc := env.newClient("PC1")
+	if err := pc.CreateVault("una password lunga e sicura"); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("Il cavaliere inesistente ", 8) + "– Anna’s Archive.epub"
+	writeWork(t, pc, long, "contenuto unico")
+	waitFor(t, "segnalazione del nome lungo", func() bool {
+		pc.mu.Lock()
+		defer pc.mu.Unlock()
+		return pc.problems[long] != ""
+	})
+	if err := pc.Close(); err == nil {
+		t.Fatal("chiusa con un file non cifrabile: sarebbe andato perso")
+	}
+	if readWork(pc, long) != "contenuto unico" {
+		t.Fatal("il file non cifrabile è stato cancellato")
+	}
+	// dopo averlo rinominato la chiusura riesce e il file è al sicuro nella cassaforte
+	if err := os.Rename(filepath.Join(pc.cfg.WorkDir, long), filepath.Join(pc.cfg.WorkDir, "Il cavaliere inesistente.epub")); err != nil {
+		t.Fatal(err)
+	}
+	if err := pc.Close(); err != nil {
+		t.Fatalf("chiusura dopo la rinomina: %v", err)
+	}
+	if err := pc.Open("una password lunga e sicura"); err != nil {
+		t.Fatal(err)
+	}
+	if readWork(pc, "Il cavaliere inesistente.epub") != "contenuto unico" {
+		t.Fatal("file rinominato non ritrovato dopo la riapertura")
+	}
+}
+
+// Una cartella diventata illeggibile non deve far "cancellare" i file che contiene.
+func TestUnreadableDirIsNotDeletion(t *testing.T) {
+	env := newTestEnv(t)
+	pc := env.newClient("PC1")
+	if err := pc.CreateVault("una password lunga e sicura"); err != nil {
+		t.Fatal(err)
+	}
+	writeWork(t, pc, "Privata/a.txt", "A")
+	writeWork(t, pc, "Privata/b.txt", "B")
+	waitFor(t, "upload", func() bool { return pendingCount(pc) == 0 && env.hubFiles() == 2 })
+	dir := filepath.Join(pc.cfg.WorkDir, "Privata")
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o700)
+	time.Sleep(3 * scanInterval)
+	pc.mu.Lock()
+	for enc, st := range pc.st.Files {
+		if st.Del || st.Pending == "del" {
+			t.Errorf("file %s segnato come cancellato con la cartella illeggibile", enc[:8])
+		}
+	}
+	pc.mu.Unlock()
+	if err := pc.Close(); err == nil {
+		t.Error("chiusa con una cartella illeggibile")
+	}
+}

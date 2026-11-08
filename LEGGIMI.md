@@ -103,7 +103,7 @@ Il NAS conosce soltanto: numero e dimensione dei file, date di modifica e strutt
 ## Limiti di questa versione (0.1.x)
 
 - **Cartelle vuote** non vengono sincronizzate: si sincronizzano solo i file.
-- **Nomi molto lunghi.** Un nome di file o cartella oltre circa 140 caratteri non può essere cifrato: l'app lo segnala negli avvisi.
+- **Nomi molto lunghi.** Un nome di file o cartella oltre circa 140 byte (le lettere accentate e simboli come `’` contano 2-3 byte) non può essere cifrato: l'app lo segnala negli avvisi e non chiude la cassaforte finché non lo rinomini, così il file non va perso.
 - **Un solo NAS.** I PC non si sincronizzano direttamente tra loro, ma passano sempre dal NAS.
 - **Apertura.** All'apertura vengono decifrati tutti i file: con molti GB servono alcuni secondi o minuti.
 - **Interfaccia nel browser.** L'interfaccia è una pagina web locale con un collegamento sul desktop; non c'è un'icona nella barra di sistema.

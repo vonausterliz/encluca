@@ -419,6 +419,9 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		return false, errors.New(c.lastErr)
 	}
 	seen := map[string]bool{}
+	// la scansione percorre tutta la cartella: l'elenco dei problemi si ricostruisce da zero,
+	// così sparisce la segnalazione di un file rinominato o spostato
+	c.problems = map[string]string{}
 	var firstErr error
 	walkErr := filepath.WalkDir(work, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -469,6 +472,14 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 	})
 	if walkErr != nil && firstErr == nil {
 		firstErr = walkErr
+	}
+	if firstErr != nil {
+		// scansione incompleta (cartella illeggibile, ecc.): i file non visti NON vanno
+		// considerati cancellati, altrimenti la cancellazione arriverebbe a NAS e altri PC
+		if strict {
+			return changed, firstErr
+		}
+		return changed, nil
 	}
 	// file spariti dalla cartella = cancellati dall'utente
 	var gone []string
@@ -1172,6 +1183,21 @@ func (c *Client) Close() error {
 		c.busy = ""
 		c.mu.Unlock()
 		return fmt.Errorf("ci sono %d eliminazioni in attesa di conferma: confermale o ripristina i file prima di chiudere", c.massDel)
+	}
+	// i file con problemi (nome troppo lungo, illeggibili) esistono solo in chiaro:
+	// chiudere cancellerebbe l'unica copia
+	if len(c.problems) > 0 {
+		names := make([]string, 0, len(c.problems))
+		for rel := range c.problems {
+			names = append(names, rel)
+		}
+		sort.Strings(names)
+		if len(names) > 3 {
+			names = append(names[:3], fmt.Sprintf("e altri %d", len(c.problems)-3))
+		}
+		c.busy = ""
+		c.mu.Unlock()
+		return fmt.Errorf("non chiudo: %d file non sono nella cassaforte e andrebbero persi (%s). Rinominali o spostali fuori dalla cartella, poi chiudi", len(c.problems), strings.Join(names, "; "))
 	}
 	c.saveState()
 	c.mu.Unlock()
