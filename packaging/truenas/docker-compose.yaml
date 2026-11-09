@@ -1,5 +1,5 @@
 # encluca hub su TrueNAS Community Edition
-# Apps -> Discover Apps -> (menu ⋮) Install via YAML -> incolla questo testo.
+# Apps -> Discover Apps -> (menu ⋮) Install via YAML -> Name "encluca" (tutto minuscolo) -> incolla questo testo.
 #
 # Prima: crea un NUOVO dataset (es. /mnt/tank/encluca) con la sottocartella "data"
 #        e assegnala all'utente apps:  sudo chown 568:568 /mnt/tank/encluca/data
@@ -22,3 +22,12 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+
+# Pulsante "Web UI" nel riquadro dell'app. TrueNAS lo legge solo alla creazione
+# (Install via YAML), non con Edit. Se cambi la porta esterna, cambia anche "port".
+x-portals:
+  - name: Web UI
+    scheme: https
+    host: 0.0.0.0
+    port: 8443
+    path: /

@@ -91,7 +91,7 @@ Devi vedere `data` con proprietario `568 568`.
 
 1. Vai in *Apps → Discover Apps*.
 2. Premi il menu **⋮**, in alto a destra accanto a *Custom App*, e scegli **Install via YAML**.
-3. **Name**: `encluca`, solo lettere minuscole, numeri e trattini.
+3. **Name**: `encluca`, solo lettere minuscole, numeri e trattini. Con una maiuscola (`Encluca`) il Save fallisce con `Error: app_name … String should match pattern`.
 4. Nel riquadro **Custom Config** incolla il testo seguente, sostituendo `NOMEPOOL` nella riga `volumes`:
 
 ```yaml
@@ -111,13 +111,22 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+
+x-portals:
+  - name: Web UI
+    scheme: https
+    host: 0.0.0.0
+    port: 8443
+    path: /
 ```
-Se al passo 0.3 la porta era occupata, la riga delle porte diventa `- "18443:8443"`.
+Se al passo 0.3 la porta era occupata, la riga delle porte diventa `- "18443:8443"` e in `x-portals` anche `port: 18443`.
 
 5. Premi **Save**. TrueNAS scarica l'immagine di encluca (circa 15 MB) e avvia il container.
 6. In *Apps → Installed*, dopo qualche secondo, `encluca` deve risultare **Running**.
 
 `pull_policy: always` fa sì che a ogni avvio TrueNAS controlli se esiste una versione più recente: è quello che rende l'aggiornamento un solo clic.
+
+Il blocco `x-portals` aggiunge il pulsante **Web UI** nel riquadro dell'app, come per le app del catalogo. `host: 0.0.0.0` significa "lo stesso indirizzo con cui stai usando TrueNAS". TrueNAS legge `x-portals` **solo quando l'app viene creata**: se lo aggiungi dopo con *Edit*, il pulsante non compare (vedi *Problemi comuni*).
 
 ---
 
@@ -154,6 +163,8 @@ L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGG
 | Nei log: `address already in use` | porta 8443 occupata | *Apps → encluca → Edit*, cambia la porta in `"18443:8443"` |
 | L'app si ferma con `permission denied` su `/data` oppure compare una cartella vuota `/mnt/NOMEPOOL` | nel YAML è rimasto `NOMEPOOL` o il percorso è sbagliato | elimina l'app, rimuovi la cartella creata per errore con `sudo rmdir` (si rifiuta se non è vuota), correggi il percorso e reinstalla |
 | Il browser non si connette | indirizzo o porta sbagliati | usa `https://` (non `http://`) e la porta scelta |
+| Al Save: `Error: app_name … String should match pattern` | il nome dell'app contiene maiuscole o caratteri non ammessi | scrivi `encluca`, tutto minuscolo |
+| Manca il pulsante **Web UI** | `x-portals` aggiunto con *Edit* su un'app già esistente: TrueNAS lo ignora | *Apps → encluca → **Delete***, poi reinstalla con *Install via YAML*, stesso nome e stesso YAML. I dati stanno nella cartella del pool e non vengono toccati: i PC si ricollegano da soli |
 
 ## Aggiornare a una nuova versione
 
@@ -167,10 +178,10 @@ La cartella `data`, cioè file cifrati, dispositivi, password e collegamento a G
 
 Se hai installato l'hub copiando il file `encluca` nella cartella `bin` (versioni fino alla 0.1.3), passa all'immagine una volta sola:
 
-1. *Apps → encluca → **Edit***.
-2. Sostituisci il testo YAML con quello del [passo 3](#passo-3--installa-lapp), mantenendo il tuo percorso `/mnt/NOMEPOOL/encluca/data`.
-3. Premi **Save**.
-4. Ricarica la pagina dell'hub: dispositivi, password e Google Drive sono quelli di prima.
+1. Apri *Apps → encluca → **Edit*** e copia in un file di testo il vecchio YAML: serve per tornare indietro. Annota il percorso della riga `…/encluca/data:/data`.
+2. Chiudi senza salvare e premi *Apps → encluca → **Delete***. La cartella `data` sta nel pool e non viene toccata.
+3. Reinstalla come al [passo 3](#passo-3--installa-lapp), con il nome `encluca` e il tuo percorso `data`. Reinstallare, invece di usare *Edit*, serve ad avere anche il pulsante **Web UI**. Nel nuovo YAML non deve restare la riga `…/encluca/bin:/app:ro`: coprirebbe il programma dell'immagine e partirebbe ancora la versione vecchia.
+4. Ricarica la pagina dell'hub: dispositivi, password e Google Drive sono quelli di prima, e i PC si ricollegano senza un nuovo abbinamento.
 5. Facoltativo, quando hai verificato che tutto funziona: la cartella `bin` non serve più.
    ```
    sudo rm -r /mnt/NOMEPOOL/encluca/bin

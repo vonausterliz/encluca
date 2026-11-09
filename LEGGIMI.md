@@ -34,7 +34,8 @@ Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio
 1. Crea un **nuovo** dataset dedicato, ad esempio `/mnt/tank/encluca`, con la sottocartella `data`.
 2. Assegnala all'utente `apps` (uid 568), senza `-R`: `chown 568:568 /mnt/tank/encluca/data`
 3. Vai in **Apps → Discover Apps → ⋮ → Install via YAML** e incolla `packaging/truenas/docker-compose.yaml`, correggendo il percorso `/mnt/tank/...`.
-   Se la porta 8443 è già usata da un'altra app, cambia solo il numero a sinistra (es. `"18443:8443"`).
+   Il nome dell'app deve essere `encluca`, tutto minuscolo. Il file aggiunge anche il pulsante **Web UI** di TrueNAS.
+   Se la porta 8443 è già usata da un'altra app, cambia il numero a sinistra (es. `"18443:8443"`) e, in `x-portals`, `port: 18443`.
 4. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
 
 **Aggiornare:** *Apps → encluca → Restart*. L'app usa l'immagine `ghcr.io/vonausterliz/encluca:latest` e a ogni avvio scarica l'ultima versione.
