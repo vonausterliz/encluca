@@ -136,10 +136,10 @@ Vai su `https://IP-DEL-NAS:8443`.
 Il browser avvisa che il certificato non è attendibile. È previsto: il certificato è autofirmato dall'hub. Scegli *Avanzate → Procedi*. I PC non si basano sul browser: verificano il NAS tramite l'impronta del certificato contenuta nel codice di abbinamento.
 
 **4.3 Accedi e cambia subito la password**
-Nel riquadro giallo *Cambia la password iniziale* inserisci la password attuale e una nuova di almeno 10 caratteri. Il file `admin-password.txt` viene cancellato automaticamente.
+Nel riquadro giallo *Cambia la password iniziale* inserisci la password attuale e una nuova di almeno 14 caratteri. Il file `admin-password.txt` viene cancellato automaticamente.
 
 **4.4 Crea il codice per il primo PC**
-Nella sezione *Dispositivi* scrivi un nome, ad esempio "PC Linux", e premi **Aggiungi dispositivo**. Copia il codice `EL1-…`: serve sul PC ed è mostrato una sola volta.
+Nella sezione *Dispositivi* scrivi un nome, ad esempio "PC Linux", e premi **Aggiungi dispositivo**. Copia il codice `EL2-…`: serve sul PC, è mostrato una sola volta, vale per un solo abbinamento e scade dopo 24 ore.
 
 L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGGIMI](../LEGGIMI.md).
 

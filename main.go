@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"embed"
 	"encoding/base64"
 	"errors"
@@ -19,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "0.1.6"
+var Version = "0.1.7"
 
 //go:embed web/*.html web/*.css web/*.js web/*.wasm
 var webFS embed.FS
@@ -31,7 +32,8 @@ var logoSVG []byte
 var logoURI = "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(logoSVG)
 
 // serveUI invia la pagina con tema (web/theme.css) e traduzioni (web/i18n.js) inclusi al posto dei segnaposto.
-func serveUI(w http.ResponseWriter, name string) {
+// repl sono coppie segnaposto/valore aggiuntive (es. "{{TOKEN}}", token).
+func serveUI(w http.ResponseWriter, name string, repl ...string) {
 	b, err := webFS.ReadFile(name)
 	css, err2 := webFS.ReadFile("web/theme.css")
 	js, err3 := webFS.ReadFile("web/i18n.js")
@@ -42,6 +44,9 @@ func serveUI(w http.ResponseWriter, name string) {
 	b = bytes.Replace(b, []byte("/*THEME*/"), css, 1)
 	b = bytes.Replace(b, []byte("/*I18N*/"), js, 1)
 	b = bytes.ReplaceAll(b, []byte("{{LOGO}}"), []byte(logoURI))
+	for i := 0; i+1 < len(repl); i += 2 {
+		b = bytes.ReplaceAll(b, []byte(repl[i]), []byte(repl[i+1]))
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b)
@@ -163,6 +168,11 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 func (c *Client) uiHandler(uiAddr string) http.Handler {
 	_, port, _ := net.SplitHostPort(uiAddr)
 	allowedHosts := map[string]bool{"127.0.0.1:" + port: true, "localhost:" + port: true, "[::1]:" + port: true}
+	// token segreto della sessione dell'interfaccia: è scritto solo nella pagina servita a chi
+	// apre http://127.0.0.1:8484 e ogni chiamata /api/ lo deve rimandare. Un sito web aperto nel
+	// browser non può leggere la pagina (stessa origine), quindi non può comandare il client
+	// neppure se un domani trovasse un modo di aggirare gli altri controlli.
+	uiToken := randHex(32)
 	mux := http.NewServeMux()
 	post := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +211,7 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 	mux.HandleFunc("/api/lang", post(func(r *http.Request) (any, error) { return nil, c.SetLang(parse(r).Lang) }))
 	mux.HandleFunc("/api/rename", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.Rename(b.Path, b.Name) }))
 	mux.HandleFunc("/api/confirm-deletes", post(func(r *http.Request) (any, error) { c.ConfirmDeletes(); return nil, nil }))
+	mux.HandleFunc("/api/confirm-recv-deletes", post(func(r *http.Request) (any, error) { c.ConfirmRecvDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -208,12 +219,17 @@ func (c *Client) uiHandler(uiAddr string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveUI(w, "web/client.html")
+		serveUI(w, "web/client.html", "{{TOKEN}}", uiToken)
 	})
 	// protezione da DNS rebinding: si accettano solo richieste indirizzate a localhost
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !allowedHosts[strings.ToLower(r.Host)] {
 			http.Error(w, "host non ammesso", http.StatusForbidden)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") && subtle.ConstantTimeCompare([]byte(r.Header.Get("X-Encluca-Token")), []byte(uiToken)) != 1 {
+			// la pagina aperta è di prima di un riavvio del servizio: la UI si ricarica da sola
+			writeJSON(w, http.StatusForbidden, map[string]any{"error": T("sessione dell'interfaccia scaduta: ricarica la pagina"), "reload": true})
 			return
 		}
 		mux.ServeHTTP(w, r)

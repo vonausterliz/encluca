@@ -53,7 +53,7 @@ Quando aggiungi un dispositivo, indica nel campo "Indirizzo NAS visto dai PC" l'
 | Windows | tasto destro su `install.ps1` → *Esegui con PowerShell* (oppure `powershell -ExecutionPolicy Bypass -File install.ps1`) |
 
 Poi:
-1. Sul NAS: **Aggiungi dispositivo** → copia il codice `EL1-…`.
+1. Sul NAS: **Aggiungi dispositivo** → copia il codice `EL2-…` (vale una sola volta, entro 24 ore).
 2. Sul PC: incolla il codice e premi **Collega**.
 3. Sul primo PC: **Crea la cassaforte** scegliendo la password. Sugli altri PC: **Apri** con la stessa password.
 

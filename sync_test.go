@@ -54,7 +54,18 @@ func newTestEnv(t *testing.T) *testEnv {
 	return env
 }
 
+// pairCode crea un dispositivo in attesa e restituisce il suo codice EL2 monouso.
 func (env *testEnv) pairCode(name string) string {
+	key := randHex(32)
+	env.hub.mu.Lock()
+	env.hub.cfg.Devices = append(env.hub.cfg.Devices, &Device{ID: randHex(6), Name: name, PairHash: sha256Hex([]byte(key)), PairExp: time.Now().Add(pairValidity)})
+	env.hub.mu.Unlock()
+	b, _ := json.Marshal(map[string]string{"u": env.srv.URL, "k": key, "f": env.hub.fingerprint})
+	return "EL2-" + base64.RawURLEncoding.EncodeToString(b)
+}
+
+// pairCodeEL1 è il vecchio formato (hub fino alla 0.1.6): il codice contiene direttamente il token.
+func (env *testEnv) pairCodeEL1(name string) string {
 	tok := randHex(32)
 	sum := sha256.Sum256([]byte(tok))
 	env.hub.mu.Lock()

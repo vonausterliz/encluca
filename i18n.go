@@ -66,7 +66,6 @@ var enMessages = map[string]string{
 	"Errore dal NAS: %v":                                                        "Error from the NAS: %v",
 
 	// client: cassaforte
-	"la password deve avere almeno 10 caratteri":                                                      "the password must be at least 10 characters long",
 	"la cassaforte esiste già: usa Apri":                                                              "the vault already exists: use Open",
 	"Cassaforte creata":                                                                               "Vault created",
 	"la cassaforte non è ancora stata creata":                                                         "the vault has not been created yet",
@@ -122,7 +121,6 @@ var enMessages = map[string]string{
 	"nome dispositivo obbligatorio":                              "device name required",
 	"Nuovo dispositivo abbinabile: %q":                           "New device ready to pair: %q",
 	"Dispositivo revocato: %q":                                   "Device revoked: %q",
-	"la nuova password deve avere almeno 10 caratteri":           "the new password must be at least 10 characters long",
 	"password attuale errata":                                    "current password is wrong",
 	"Password amministratore cambiata":                           "Administrator password changed",
 	"Encluca hub %s in ascolto su https://%s (impronta certificato %s…)": "Encluca hub %s listening on https://%s (certificate fingerprint %s…)",
@@ -146,4 +144,20 @@ var enMessages = map[string]string{
 	"inserisci prima Client ID e Client Secret": "enter Client ID and Client Secret first",
 	"Google Drive non è ancora autorizzato":     "Google Drive is not authorized yet",
 	"Google Drive scollegato":                   "Google Drive disconnected",
+	// sicurezza 0.1.7
+	"ATTENZIONE: %d modifiche non erano ancora arrivate al NAS precedente: conservate (cifrate) in %s":                                                         "WARNING: %d changes had not reached the previous NAS yet: kept (encrypted) in %s",
+	"ATTENZIONE: il NAS chiede di eliminare %d file insieme. Eliminazione sospesa: confermala dall'interfaccia, oppure ripristina i file dal cestino del NAS.": "WARNING: the NAS asks to delete %d files at once. Deletion paused: confirm it in the interface, or restore the files from the NAS trash.",
+	"codice di abbinamento già usato o scaduto: generane uno nuovo dalla pagina del NAS":                                                                       "pairing code already used or expired: generate a new one from the NAS page",
+	"Codice di abbinamento non valido, già usato o scaduto (da %s)":                                                                                            "Invalid, used or expired pairing code (from %s)",
+	"Dispositivo abbinato: %q":                                              "Device paired: %q",
+	"ERRORE lettura cestino: %v":                                            "ERROR reading trash: %v",
+	"ERRORE salvataggio cestino: %v":                                        "ERROR saving trash: %v",
+	"ERRORE spostamento nel cestino: %v":                                    "ERROR moving to trash: %v",
+	"la nuova password deve avere almeno %d caratteri":                      "the new password must be at least %d characters long",
+	"la password deve avere almeno %d caratteri":                            "the password must be at least %d characters long",
+	"Le eliminazioni in arrivo dal NAS non sono più in sospeso":             "Incoming deletions from the NAS are no longer on hold",
+	"Password amministratore cambiata: le altre sessioni sono state chiuse": "Administrator password changed: other sessions have been closed",
+	"Ripristinati dal cestino: %d file":                                     "Restored from trash: %d files",
+	"sessione dell'interfaccia scaduta: ricarica la pagina":                 "interface session expired: reload the page",
+	"troppi tentativi errati: riprova tra qualche minuto":                   "too many failed attempts: try again in a few minutes",
 }

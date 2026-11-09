@@ -142,3 +142,13 @@ button.linkbtn:hover{background:none;text-decoration:underline}
 .br-table tr.br-dir .fname svg{color:var(--primary)}
 .br-table tr.br-dir:hover td{background:var(--alt1)}
 .br-table td:nth-child(2),.br-table td:nth-child(3){color:var(--fg2);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* indicatore di robustezza della password */
+.pwmeter{margin-top:8px;max-width:420px}
+.pwmeter .pwbar{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.pwmeter .pwbar i{height:4px;border-radius:2px;background:var(--alt2)}
+.pwmeter[data-level="1"] .pwbar i:nth-child(-n+1){background:var(--red)}
+.pwmeter[data-level="2"] .pwbar i:nth-child(-n+2){background:var(--orange)}
+.pwmeter[data-level="3"] .pwbar i:nth-child(-n+3){background:var(--yellow)}
+.pwmeter[data-level="4"] .pwbar i{background:var(--green)}
+.pwmeter .pwlabel{font-size:12.5px;color:var(--mute);min-height:1.4em;display:block;margin-top:2px}
+.pwmeter[data-level="0"]{visibility:hidden}

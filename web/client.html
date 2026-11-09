@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="{{LOGO}}">
+<meta name="encluca-token" content="{{TOKEN}}">
 <title>encluca</title>
 <style>
 /*THEME*/
@@ -54,7 +55,7 @@ ul.alerts li:last-child{border-bottom:0}
       <div class="card-body">
         <p>Sul NAS apri l'interfaccia di encluca, premi <b>Aggiungi dispositivo</b> e incolla qui il codice che compare.</p>
         <label for="pairCode">Codice di abbinamento</label>
-        <input id="pairCode" class="full" placeholder="EL1-…" autocomplete="off">
+        <input id="pairCode" class="full" placeholder="EL2-…" autocomplete="off">
         <label for="pairName">Nome di questo computer</label>
         <input id="pairName" class="full">
         <label for="pairUrl">Indirizzo del NAS (facoltativo, se diverso da quello nel codice)</label>
@@ -77,6 +78,7 @@ ul.alerts li:last-child{border-bottom:0}
             <input id="pw2" type="password" placeholder="Ripeti la password" class="hidden" autocomplete="new-password">
             <button id="openBtn" class="primary">Apri</button>
           </div>
+          <div class="pwmeter hidden" id="pwMeterBox" data-level="0" aria-live="polite"><div class="pwbar"><i></i><i></i><i></i><i></i></div><span class="pwlabel"></span></div>
           <div class="row hidden" id="openCtl">
             <button id="folderBtn" class="primary">Mostra i file</button>
             <button id="closeBtn" class="ghost">Chiudi la cassaforte</button>
@@ -102,6 +104,10 @@ ul.alerts li:last-child{border-bottom:0}
       <div class="card">
         <div class="card-header"><h2>Avvisi</h2></div>
         <div class="card-body">
+          <div id="recvMassBox" class="hidden" style="margin-bottom:12px">
+            <p class="warn-text" id="recvMassText"></p>
+            <button id="recvMassBtn" class="danger">Applica l'eliminazione</button>
+          </div>
           <div id="massBox" class="hidden" style="margin-bottom:12px">
             <p class="warn-text" id="massText"></p>
             <button id="massBtn" class="danger">Conferma l'eliminazione</button>
@@ -173,12 +179,18 @@ const EN = {
  'Salvato.':'Saved.','errore':'error','Sincronizzazione…':'Syncing…','NAS non raggiungibile: modifiche in coda':'NAS unreachable: changes queued',
  '{n} file ancora in invio':'{n} files still sending','Allineato alle {h}':'In sync at {h}',
  '{d} di {n} file':'{d} of {n} files','Invio al NAS':'Sending to the NAS','Ricezione dal NAS':'Receiving from the NAS',
+ 'Troppo corta: almeno {n} caratteri':'Too short: at least {n} characters','Debole':'Weak','Discreta':'Fair','Buona':'Good','Ottima':'Strong',
+ "Applica l'eliminazione":'Apply the deletion','Eliminare davvero questi file anche da questo computer?':'Really delete these files from this computer too?',
+ "Un altro dispositivo ha eliminato {n} file tutti insieme. Su questo computer non li ho ancora eliminati. Se è stato fatto apposta, applica l'eliminazione; altrimenti ripristinali dal cestino nella pagina del NAS.":'Another device deleted {n} files all at once. They have not been deleted on this computer yet. If it was intentional, apply the deletion; otherwise restore them from the trash on the NAS page.',
  'Lingua / Language':'Lingua / Language','Italiano':'Italiano','English':'English',
 };
 let S = null, forcePair = false;
+const UI_TOKEN = document.querySelector('meta[name="encluca-token"]').content;
 async function api(path, body){
-  const r = await fetch(path, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-Encluca':'1'}, body:JSON.stringify(body)});
+  const h = {'X-Encluca-Token': UI_TOKEN};
+  const r = await fetch(path, body === undefined ? {headers:h} : {method:'POST', headers:{...h,'Content-Type':'application/json','X-Encluca':'1'}, body:JSON.stringify(body)});
   const j = await r.json().catch(()=>({}));
+  if(r.status === 403 && j.reload){ location.reload(); }
   if(!r.ok) throw new Error(j.error || (t('errore') + ' ' + r.status));
   return j;
 }
@@ -216,6 +228,7 @@ function render(){
   $('shackle').setAttribute('d', s.open ? 'M8 11V7a4 4 0 0 1 7.5-2' : 'M8 11V7a4 4 0 0 1 8 0v4');
   const creating = s.paired && !s.vaultKnown && !s.open;
   $('pw2').classList.toggle('hidden', !creating);
+  $('pwMeterBox').classList.toggle('hidden', !creating);
   $('closedCtl').classList.toggle('hidden', s.open);
   $('openCtl').classList.toggle('hidden', !s.open);
   const dc = $('doorChip');
@@ -256,9 +269,11 @@ function render(){
   for(const c of (s.conflicts||[])) items.push(['', t('Conflitto: la tua versione è salvata come “{f}”', {f:c})]);
   for(const p of (s.problems||[])) items.push(['warn-text', p]);
   $('alerts').innerHTML = '';
-  if(!items.length && !(s.renames||[]).length){ const li=document.createElement('li'); li.className='empty'; li.textContent=t('Nessun avviso.'); $('alerts').append(li); }
+  if(!items.length && !(s.renames||[]).length && !s.massDelete && !s.massRecvDelete){ const li=document.createElement('li'); li.className='empty'; li.textContent=t('Nessun avviso.'); $('alerts').append(li); }
   for(const [cls, txt] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=txt; $('alerts').append(li); }
   $('massBox').classList.toggle('hidden', !s.massDelete);
+  $('recvMassBox').classList.toggle('hidden', !s.massRecvDelete);
+  $('recvMassText').textContent = t('Un altro dispositivo ha eliminato {n} file tutti insieme. Su questo computer non li ho ancora eliminati. Se è stato fatto apposta, applica l\'eliminazione; altrimenti ripristinali dal cestino nella pagina del NAS.', {n:s.massRecvDelete});
   renderRenames(s.renames || [], s.open);
   $('massText').textContent = t('{n} file sono spariti tutti insieme dalla cartella aperta. Se li hai cancellati tu, conferma; altrimenti ripristinali.', {n:s.massDelete});
 
@@ -303,9 +318,10 @@ $('pairBtn').onclick = async () => { busy($('pairBtn'),true); $('pairMsg').textC
   catch(e){ $('pairMsg').textContent=e.message; } busy($('pairBtn'),false); refresh(); };
 $('openBtn').onclick = async () => {
   const creating = !$('pw2').classList.contains('hidden');
+  if(creating && [...$('pw').value].length < PW_MIN){ $('doorMsg').textContent=t('Troppo corta: almeno {n} caratteri', {n:PW_MIN}); return; }
   if(creating && $('pw').value !== $('pw2').value){ $('doorMsg').textContent=t('Le due password non coincidono.'); return; }
   busy($('openBtn'),true); $('doorMsg').textContent = creating ? t('Creazione…') : t('Apertura…');
-  try{ await api(creating ? '/api/create' : '/api/open', {Password:$('pw').value}); $('pw').value=''; $('pw2').value=''; $('doorMsg').textContent=''; }
+  try{ await api(creating ? '/api/create' : '/api/open', {Password:$('pw').value}); $('pw').value=''; $('pw2').value=''; updMeter(); $('doorMsg').textContent=''; }
   catch(e){ $('doorMsg').textContent=e.message; } busy($('openBtn'),false); refresh(); };
 $('pw').addEventListener('keydown', e => { if(e.key==='Enter' && $('pw2').classList.contains('hidden')) $('openBtn').click(); });
 $('closeBtn').onclick = async () => { busy($('closeBtn'),true); $('doorMsg').textContent=t('Chiusura…');
@@ -329,6 +345,8 @@ $('langSel').onchange = async () => {
   try{ await api('/api/lang', {Lang:l}); setLangUI(l); refresh(); }catch(e){ $('setMsg').textContent = e.message; }
 };
 $('massBtn').onclick = () => api('/api/confirm-deletes',{}).then(refresh);
+$('recvMassBtn').onclick = () => { if(confirm(t('Eliminare davvero questi file anche da questo computer?'))) api('/api/confirm-recv-deletes',{}).then(refresh); };
+const updMeter = pwMeter($('pw'), $('pwMeterBox'));
 $('workBtn').onclick = () => api('/api/workdir',{Dir:$('workDir').value}).then(()=>$('setMsg').textContent=t('Salvato.')).catch(e=>$('setMsg').textContent=e.message);
 $('repairBtn').onclick = () => { forcePair = true; render(); $('pairCode').focus(); };
 refresh(); setInterval(refresh, 2000);

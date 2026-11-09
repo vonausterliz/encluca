@@ -112,8 +112,13 @@ type Client struct {
 	encCache  map[string]string
 	massDel   int // eliminazioni bloccate in attesa di conferma
 	allowDel  bool
-	busy      string
-	pullReset chan struct{}
+	// eliminazioni in arrivo dal NAS sospese in attesa di conferma (cancellazione di massa
+	// fatta su un altro dispositivo: potrebbe essere un errore o un ransomware)
+	massRecvDel  int
+	allowRecvDel bool
+	recentDels   []time.Time // eliminazioni ricevute di recente (finestra di recvDelWindow)
+	busy         string
+	pullReset    chan struct{}
 }
 
 func (c *Client) cfgPath() string   { return filepath.Join(c.dir, "config.json") }
@@ -697,6 +702,9 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 		st.Pending = "" // la modifica altrui prevale sulla nostra cancellazione
 	}
 	if e.Del {
+		if st != nil && !st.Del {
+			c.recentDels = append(c.recentDels, time.Now())
+		}
 		os.Remove(c.mirrorPath(e.Path))
 		if c.st.Open && c.cip != nil {
 			if rel, err := c.cip.DecryptPath(e.Path); err == nil {
@@ -797,6 +805,30 @@ func (c *Client) pullLoop(ctx context.Context) {
 			continue
 		}
 		backoff = time.Second
+		if hasDeletes(res.Entries) {
+			// le eliminazioni di un altro PC arrivano una alla volta: si aspetta un attimo e si
+			// rilegge, così una cancellazione di massa si vede tutta insieme
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(recvDelSettle):
+			}
+			rctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+			err := c.getJSON(rctx, "/api/v1/changes", url.Values{"since": {strconv.FormatInt(since, 10)}}, &res)
+			cancel()
+			if err != nil {
+				continue
+			}
+		}
+		if c.holdMassRecvDelete(res.Entries) {
+			select {
+			case <-ctx.Done():
+				return
+			case <-c.pullReset:
+			case <-time.After(5 * time.Second):
+			}
+			continue
+		}
 		ok := true
 		if len(res.Entries) > 0 {
 			rp := &progress{Total: len(res.Entries)}
@@ -839,6 +871,76 @@ func (c *Client) pullLoop(ctx context.Context) {
 		if !ok {
 			time.Sleep(backoff)
 		}
+	}
+}
+
+// holdMassRecvDelete decide se sospendere un gruppo di modifiche che cancellerebbe insieme
+// molti file presenti qui (più di 20 e più della metà). Le modifiche restano sul NAS: si
+// applicano dopo la conferma, oppure spariscono da sole se i file vengono ripristinati dal
+// cestino del NAS.
+const (
+	recvDelSettle = 2 * time.Second
+	recvDelWindow = 10 * time.Minute
+)
+
+func hasDeletes(entries []*Entry) bool {
+	for _, e := range entries {
+		if e.Del {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Client) holdMassRecvDelete(entries []*Entry) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// conta anche le eliminazioni applicate negli ultimi minuti: una cancellazione di massa
+	// non deve passare solo perché arriva a pezzi
+	recent := c.recentDels[:0]
+	for _, ts := range c.recentDels {
+		if time.Since(ts) < recvDelWindow {
+			recent = append(recent, ts)
+		}
+	}
+	c.recentDels = recent
+	live, dels := len(recent), len(recent)
+	for _, st := range c.st.Files {
+		if !st.Del {
+			live++
+		}
+	}
+	for _, e := range entries {
+		if st := c.st.Files[e.Path]; e.Del && st != nil && !st.Del && st.Rev < e.Rev {
+			dels++
+		}
+	}
+	if dels <= 20 || dels*2 <= live || c.allowRecvDel {
+		if c.massRecvDel > 0 && !c.allowRecvDel {
+			c.log.Print(T("Le eliminazioni in arrivo dal NAS non sono più in sospeso"))
+		}
+		if c.allowRecvDel {
+			c.recentDels = nil // confermate: non contano più per la prossima volta
+		}
+		c.massRecvDel = 0
+		c.allowRecvDel = false
+		return false
+	}
+	if c.massRecvDel != dels {
+		c.log.Printf(T("ATTENZIONE: il NAS chiede di eliminare %d file insieme. Eliminazione sospesa: confermala dall'interfaccia, oppure ripristina i file dal cestino del NAS."), dels)
+	}
+	c.massRecvDel = dels
+	return true
+}
+
+// ConfirmRecvDeletes applica le eliminazioni di massa in arrivo dal NAS.
+func (c *Client) ConfirmRecvDeletes() {
+	c.mu.Lock()
+	c.allowRecvDel = c.massRecvDel > 0
+	c.mu.Unlock()
+	select {
+	case c.pullReset <- struct{}{}:
+	default:
 	}
 }
 
@@ -1034,27 +1136,88 @@ func (c *Client) scanLoop(ctx context.Context) {
 
 // ---------- operazioni dell'utente ----------
 
-func parsePairCode(code string) (u, tok, fp string, err error) {
+// pairCode è il contenuto di un codice di abbinamento. EL2 (attuale) contiene una chiave
+// monouso da scambiare con il token; EL1 (hub fino alla 0.1.6) conteneva direttamente il token.
+type pairCode struct {
+	URL, Token, Key, Fingerprint string
+}
+
+func parsePairCode(code string) (pairCode, error) {
 	code = strings.TrimSpace(code)
-	if !strings.HasPrefix(code, "EL1-") {
-		return "", "", "", errors.New(T("codice di abbinamento non valido"))
+	bad := errors.New(T("codice di abbinamento non valido"))
+	var ver string
+	switch {
+	case strings.HasPrefix(code, "EL2-"):
+		ver = "EL2"
+	case strings.HasPrefix(code, "EL1-"):
+		ver = "EL1"
+	default:
+		return pairCode{}, bad
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(code, "EL1-"))
+	raw, err := base64.RawURLEncoding.DecodeString(code[4:])
 	if err != nil {
-		return "", "", "", errors.New(T("codice di abbinamento non valido"))
+		return pairCode{}, bad
 	}
 	var m map[string]string
-	if json.Unmarshal(raw, &m) != nil || m["t"] == "" || m["f"] == "" {
-		return "", "", "", errors.New(T("codice di abbinamento non valido"))
+	if json.Unmarshal(raw, &m) != nil || m["f"] == "" {
+		return pairCode{}, bad
 	}
-	return m["u"], m["t"], m["f"], nil
+	pc := pairCode{URL: m["u"], Fingerprint: m["f"]}
+	if ver == "EL2" {
+		pc.Key = m["k"]
+	} else {
+		pc.Token = m["t"]
+	}
+	if pc.Key == "" && pc.Token == "" {
+		return pairCode{}, bad
+	}
+	return pc, nil
+}
+
+// claimPair scambia la chiave monouso con il token definitivo del dispositivo.
+func (c *Client) claimPair(ctx context.Context, key string) (string, error) {
+	c.mu.Lock()
+	base, hc := c.cfg.HubURL, c.hc
+	c.mu.Unlock()
+	b, _ := json.Marshal(map[string]string{"Key": key})
+	r, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/api/v1/pair", bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+	r.Header.Set("Content-Type", "application/json")
+	resp, err := hc.Do(r)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var out struct{ Token, Error string }
+	json.NewDecoder(io.LimitReader(resp.Body, 1<<16)).Decode(&out)
+	if resp.StatusCode != http.StatusOK || out.Token == "" {
+		if out.Error == "" {
+			out.Error = resp.Status
+		}
+		return "", errors.New(out.Error)
+	}
+	return out.Token, nil
+}
+
+// pendingLocked conta i file con modifiche non ancora accettate dal NAS.
+func (c *Client) pendingLocked() int {
+	n := 0
+	for _, st := range c.st.Files {
+		if st.Pending != "" || st.Conflict > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 func (c *Client) Pair(code, hubURL, name string) error {
-	u, tok, fp, err := parsePairCode(code)
+	pc, err := parsePairCode(code)
 	if err != nil {
 		return err
 	}
+	u := pc.URL
 	if strings.TrimSpace(hubURL) != "" {
 		u = strings.TrimSpace(hubURL)
 	}
@@ -1067,28 +1230,69 @@ func (c *Client) Pair(code, hubURL, name string) error {
 		return errors.New(T("chiudi la cassaforte prima di cambiare NAS"))
 	}
 	old := c.cfg
-	c.cfg.HubURL, c.cfg.Token, c.cfg.Fingerprint = strings.TrimRight(u, "/"), tok, fp
+	oldMeta, _ := os.ReadFile(c.metaCache())
+	c.cfg.HubURL, c.cfg.Token, c.cfg.Fingerprint = strings.TrimRight(u, "/"), pc.Token, pc.Fingerprint
 	if strings.TrimSpace(name) != "" {
 		c.cfg.DeviceName = strings.TrimSpace(name)
 	}
 	c.setupHTTP()
 	c.mu.Unlock()
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if _, err := c.fetchMeta(ctx); err != nil {
+	restore := func() {
 		c.mu.Lock()
 		c.cfg = old
 		c.setupHTTP()
+		if oldMeta != nil {
+			writeFileAtomic(c.metaCache(), oldMeta, 0o600)
+		}
 		c.mu.Unlock()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if pc.Key != "" {
+		// prima si verifica che il NAS risponda (e che il certificato sia quello giusto),
+		// così un errore di rete non consuma il codice monouso
+		var ping map[string]any
+		if err := c.getJSON(ctx, "/api/v1/ping", nil, &ping); err != nil {
+			restore()
+			return fmt.Errorf(T("impossibile contattare il NAS: %w"), err)
+		}
+		tok, err := c.claimPair(ctx, pc.Key)
+		if err != nil {
+			restore()
+			return err
+		}
+		c.mu.Lock()
+		c.cfg.Token = tok
+		c.mu.Unlock()
+	}
+	meta, err := c.fetchMeta(ctx)
+	if err != nil {
+		restore()
 		return fmt.Errorf(T("impossibile contattare il NAS: %w"), err)
 	}
 	c.mu.Lock()
-	if old.Fingerprint != fp {
-		// nuovo NAS: si riparte da zero con la copia locale
+	if old.Fingerprint != pc.Fingerprint {
+		// nuovo NAS: si riparte da zero con la copia locale. Le modifiche mai arrivate al NAS
+		// precedente non si buttano: copia cifrata, stato e metadati vanno in un archivio
+		if n := c.pendingLocked(); n > 0 {
+			arch := filepath.Join(c.dir, "nas-precedente-"+time.Now().Format("20060102-150405"))
+			if err := os.MkdirAll(arch, 0o700); err == nil {
+				os.Rename(c.mirrorDir(), filepath.Join(arch, "mirror"))
+				saveJSON(filepath.Join(arch, "state.json"), &c.st)
+				saveJSON(filepath.Join(arch, "config.json"), &old)
+				if oldMeta != nil {
+					writeFileAtomic(filepath.Join(arch, "vault-meta.json"), oldMeta, 0o600)
+				}
+				c.log.Printf(T("ATTENZIONE: %d modifiche non erano ancora arrivate al NAS precedente: conservate (cifrate) in %s"), n, arch)
+			}
+		}
 		os.RemoveAll(c.mirrorDir())
 		os.MkdirAll(c.mirrorDir(), 0o700)
 		c.st = clientState{Files: map[string]*fstate{}}
 		c.saveState()
+		if meta == nil {
+			os.Remove(c.metaCache()) // i metadati erano della cassaforte del NAS precedente
+		}
 	}
 	c.revoked = false
 	err = saveJSON(c.cfgPath(), &c.cfg)
@@ -1102,8 +1306,8 @@ func (c *Client) Pair(code, hubURL, name string) error {
 }
 
 func (c *Client) CreateVault(password string) error {
-	if len(password) < 10 {
-		return errors.New(T("la password deve avere almeno 10 caratteri"))
+	if len([]rune(password)) < minPasswordLen {
+		return fmt.Errorf(T("la password deve avere almeno %d caratteri"), minPasswordLen)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -1349,7 +1553,7 @@ func (c *Client) Status() map[string]any {
 		"deviceName": c.cfg.DeviceName, "online": c.online, "lastError": c.lastErr, "lastSync": c.lastSync,
 		"open": c.cip != nil, "staleOpen": c.cip == nil && c.st.Open, "workDir": c.cfg.WorkDir,
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
-		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "busy": c.busy, "vaultKnown": metaErr == nil,
+		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(),
 	}
 }

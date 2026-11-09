@@ -54,7 +54,14 @@ type Device struct {
 	TokenHash string    `json:"tokenHash"`
 	Created   time.Time `json:"created"`
 	LastSeen  time.Time `json:"lastSeen"`
+	// abbinamento in attesa: il codice EL2 contiene una chiave monouso (qui solo l'hash) che il
+	// client scambia con il token definitivo. Finché TokenHash è vuoto il dispositivo non è attivo.
+	PairHash string    `json:"pairHash,omitempty"`
+	PairExp  time.Time `json:"pairExp,omitempty"`
 }
+
+// pairValidity è la durata di un codice di abbinamento non ancora usato.
+const pairValidity = 24 * time.Hour
 
 type hubConfig struct {
 	AdminHash string       `json:"adminHash"`
@@ -78,6 +85,9 @@ type Hub struct {
 	cert        tls.Certificate
 	log         *ringLog
 	gd          *GDrive
+	limiter     *ipLimiter
+	scryptSem   chan struct{}
+	trash       []trashItem
 }
 
 func (h *Hub) vaultDir() string  { return filepath.Join(h.dir, "vault") }
@@ -92,7 +102,8 @@ func hashAdmin(pw, salt string) string {
 }
 
 func newHub(dir, listen string) (*Hub, error) {
-	h := &Hub{dir: dir, listen: listen, notify: make(chan struct{}), sessions: map[string]time.Time{}}
+	h := &Hub{dir: dir, listen: listen, notify: make(chan struct{}), sessions: map[string]time.Time{},
+		limiter: newIPLimiter(), scryptSem: make(chan struct{}, 2)}
 	for _, d := range []string{dir, h.vaultDir(), h.tmpDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
@@ -130,6 +141,7 @@ func newHub(dir, listen string) (*Hub, error) {
 	if err := h.loadOrCreateCert(); err != nil {
 		return nil, err
 	}
+	h.loadTrash()
 	h.gd = newGDrive(h)
 	return h, h.saveCfg()
 }
@@ -225,7 +237,7 @@ func (h *Hub) deviceAuth(r *http.Request) *Device {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, d := range h.cfg.Devices {
-		if subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(th)) == 1 {
+		if d.TokenHash != "" && subtle.ConstantTimeCompare([]byte(d.TokenHash), []byte(th)) == 1 {
 			if time.Since(d.LastSeen) > time.Minute {
 				d.LastSeen = time.Now()
 				h.saveCfg()
@@ -248,6 +260,63 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 }
 
 // ---------- API dispositivi ----------
+
+// pruneExpiredPairsLocked toglie i dispositivi mai abbinati il cui codice è scaduto.
+func (h *Hub) pruneExpiredPairsLocked() bool {
+	out := h.cfg.Devices[:0]
+	pruned := false
+	for _, d := range h.cfg.Devices {
+		if d.TokenHash == "" && time.Now().After(d.PairExp) {
+			pruned = true
+			continue
+		}
+		out = append(out, d)
+	}
+	h.cfg.Devices = out
+	return pruned
+}
+
+// apiPair scambia la chiave monouso del codice di abbinamento con il token del dispositivo.
+// Dopo l'uso (o dopo 24 ore) il codice non vale più: chi lo vede in seguito non può usarlo.
+func (h *Hub) apiPair(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
+		return
+	}
+	ip := clientIP(r)
+	if wait := h.limiter.blocked(ip); wait > 0 {
+		tooMany(w, wait)
+		return
+	}
+	var body struct{ Key string }
+	readBody(r, &body)
+	sum := sha256Hex([]byte(body.Key))
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pruneExpiredPairsLocked()
+	var dev *Device
+	for _, d := range h.cfg.Devices {
+		if body.Key != "" && d.TokenHash == "" && subtle.ConstantTimeCompare([]byte(d.PairHash), []byte(sum)) == 1 {
+			dev = d
+		}
+	}
+	if dev == nil {
+		h.limiter.fail(ip)
+		h.log.Printf(T("Codice di abbinamento non valido, già usato o scaduto (da %s)"), ip)
+		writeErr(w, http.StatusGone, T("codice di abbinamento già usato o scaduto: generane uno nuovo dalla pagina del NAS"))
+		return
+	}
+	tok := randHex(32)
+	dev.TokenHash, dev.PairHash, dev.PairExp = sha256Hex([]byte(tok)), "", time.Time{}
+	dev.LastSeen = time.Now()
+	if err := h.saveCfg(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.limiter.ok(ip)
+	h.log.Printf(T("Dispositivo abbinato: %q"), dev.Name)
+	writeJSON(w, http.StatusOK, map[string]string{"token": tok, "name": dev.Name})
+}
 
 func (h *Hub) apiMeta(w http.ResponseWriter, r *http.Request, d *Device) {
 	switch r.Method {
@@ -451,7 +520,11 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 			writeJSON(w, http.StatusOK, &c)
 			return
 		}
-		os.Remove(full)
+		if err := h.trashFileLocked(full, cur, d.ID); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			h.log.Printf(T("ERRORE spostamento nel cestino: %v"), err)
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 		// rimuove le cartelle rimaste vuote
 		for dir := filepath.Dir(full); dir != h.vaultDir() && strings.HasPrefix(dir, h.vaultDir()); dir = filepath.Dir(dir) {
 			if os.Remove(dir) != nil {
@@ -508,38 +581,29 @@ func readBody(r *http.Request, v any) error {
 	return json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(v)
 }
 
-var loginLimiter = struct {
-	sync.Mutex
-	last time.Time
-}{}
-
 func (h *Hub) adminLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Encluca") != "1" || r.Method != http.MethodPost {
 		writeErr(w, http.StatusForbidden, T("richiesta non valida"))
 		return
 	}
+	ip := clientIP(r)
+	if wait := h.limiter.blocked(ip); wait > 0 {
+		tooMany(w, wait)
+		return
+	}
 	var body struct{ Password string }
 	readBody(r, &body)
-	// rallenta i tentativi a forza bruta
-	loginLimiter.Lock()
-	if wait := time.Second - time.Since(loginLimiter.last); wait > 0 {
-		time.Sleep(wait)
-	}
-	loginLimiter.last = time.Now()
-	loginLimiter.Unlock()
-	h.mu.Lock()
-	ok := subtle.ConstantTimeCompare([]byte(hashAdmin(body.Password, h.cfg.AdminSalt)), []byte(h.cfg.AdminHash)) == 1
-	var sid string
-	if ok {
-		sid = randHex(32)
-		h.sessions[sid] = time.Now().Add(12 * time.Hour)
-	}
-	h.mu.Unlock()
-	if !ok {
-		h.log.Printf(T("Accesso amministratore fallito da %s"), r.RemoteAddr)
+	if !h.checkAdmin(body.Password) {
+		h.limiter.fail(ip)
+		h.log.Printf(T("Accesso amministratore fallito da %s"), ip)
 		writeErr(w, http.StatusUnauthorized, T("password errata"))
 		return
 	}
+	h.limiter.ok(ip)
+	sid := randHex(32)
+	h.mu.Lock()
+	h.sessions[sid] = time.Now().Add(12 * time.Hour)
+	h.mu.Unlock()
 	http.SetCookie(w, &http.Cookie{Name: "el_session", Value: sid, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteStrictMode, MaxAge: 12 * 3600})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -564,12 +628,16 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 			size += e.Size
 		}
 	}
+	if h.pruneExpiredPairsLocked() {
+		h.saveCfg()
+	}
 	devs := make([]map[string]any, 0, len(h.cfg.Devices))
 	for _, d := range h.cfg.Devices {
-		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen})
+		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == ""})
 	}
 	seq := h.idx.Seq
 	browse := h.cfg.BrowseEnabled
+	trash := h.trashStatsLocked()
 	h.mu.Unlock()
 	_, metaErr := os.Stat(h.metaPath())
 	_, pwFileErr := os.Stat(filepath.Join(h.dir, "admin-password.txt"))
@@ -577,7 +645,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 		"version": Version, "files": files, "bytes": size, "seq": seq,
 		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint, "browseEnabled": browse,
 		"defaultPassword": pwFileErr == nil, "lang": getLang(),
-		"gdrive": h.gd.status(), "log": h.log.Lines(),
+		"gdrive": h.gd.status(), "trash": trash, "log": h.log.Lines(),
 	})
 }
 
@@ -591,10 +659,10 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, T("nome dispositivo obbligatorio"))
 			return
 		}
-		tok := randHex(32)
-		sum := sha256.Sum256([]byte(tok))
-		d := &Device{ID: randHex(6), Name: body.Name, TokenHash: hex.EncodeToString(sum[:]), Created: time.Now()}
+		key := randHex(32)
+		d := &Device{ID: randHex(6), Name: body.Name, PairHash: sha256Hex([]byte(key)), PairExp: time.Now().Add(pairValidity), Created: time.Now()}
 		h.mu.Lock()
+		h.pruneExpiredPairsLocked()
 		h.cfg.Devices = append(h.cfg.Devices, d)
 		err := h.saveCfg()
 		h.mu.Unlock()
@@ -606,9 +674,9 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		if u == "" {
 			u = "https://" + r.Host
 		}
-		code, _ := json.Marshal(map[string]string{"u": u, "t": tok, "f": h.fingerprint})
+		code, _ := json.Marshal(map[string]string{"u": u, "k": key, "f": h.fingerprint})
 		h.log.Printf(T("Nuovo dispositivo abbinabile: %q"), d.Name)
-		writeJSON(w, http.StatusOK, map[string]string{"code": "EL1-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
+		writeJSON(w, http.StatusOK, map[string]string{"code": "EL2-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
 	case http.MethodDelete:
 		id := r.URL.Query().Get("id")
 		h.mu.Lock()
@@ -655,20 +723,41 @@ func (h *Hub) adminLang(w http.ResponseWriter, r *http.Request) {
 func (h *Hub) adminPassword(w http.ResponseWriter, r *http.Request) {
 	var body struct{ Old, New string }
 	readBody(r, &body)
-	if len(body.New) < 10 {
-		writeErr(w, http.StatusBadRequest, T("la nuova password deve avere almeno 10 caratteri"))
+	if len([]rune(body.New)) < minPasswordLen {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf(T("la nuova password deve avere almeno %d caratteri"), minPasswordLen))
 		return
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if subtle.ConstantTimeCompare([]byte(hashAdmin(body.Old, h.cfg.AdminSalt)), []byte(h.cfg.AdminHash)) != 1 {
+	ip := clientIP(r)
+	if wait := h.limiter.blocked(ip); wait > 0 {
+		tooMany(w, wait)
+		return
+	}
+	if !h.checkAdmin(body.Old) {
+		h.limiter.fail(ip)
 		writeErr(w, http.StatusUnauthorized, T("password attuale errata"))
 		return
 	}
-	h.setAdminPassword(body.New)
-	h.saveCfg()
+	salt := randHex(16)
+	h.scryptSem <- struct{}{}
+	hash := hashAdmin(body.New, salt)
+	<-h.scryptSem
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cfg.AdminSalt, h.cfg.AdminHash = salt, hash
+	if err := h.saveCfg(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	os.Remove(filepath.Join(h.dir, "admin-password.txt"))
-	h.log.Print(T("Password amministratore cambiata"))
+	// chi conosceva la vecchia password perde l'accesso: resta valida solo la sessione
+	// che ha fatto il cambio (gli altri browser devono rientrare con la nuova)
+	cur, _ := r.Cookie("el_session")
+	for sid := range h.sessions {
+		if cur == nil || sid != cur.Value {
+			delete(h.sessions, sid)
+		}
+	}
+	h.log.Print(T("Password amministratore cambiata: le altre sessioni sono state chiuse"))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -687,6 +776,7 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/api/v1/ping", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"app": "encluca-hub", "version": Version})
 	})
+	mux.HandleFunc("/api/v1/pair", h.apiPair)
 	mux.HandleFunc("/api/v1/meta", h.withDevice(h.apiMeta))
 	mux.HandleFunc("/api/v1/changes", h.withDevice(h.apiChanges))
 	mux.HandleFunc("/api/v1/entry", h.withDevice(h.apiEntry))
@@ -699,6 +789,7 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/admin/api/password", h.withAdmin(h.adminPassword))
 	mux.HandleFunc("/admin/api/lang", h.withAdmin(h.adminLang))
 	mux.HandleFunc("/admin/api/browse", h.withAdmin(h.adminBrowseToggle))
+	mux.HandleFunc("/admin/api/trash/restore", h.withAdmin(h.adminTrashRestore))
 	mux.HandleFunc("/admin/api/vault/meta", h.withBrowse(h.apiBrowseMeta))
 	mux.HandleFunc("/admin/api/vault/list", h.withBrowse(h.apiBrowseList))
 	mux.HandleFunc("/admin/api/vault/file", h.withBrowse(h.apiBrowseFile))

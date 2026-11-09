@@ -1,0 +1,28 @@
+# Test e controllo delle vulnerabilità note (govulncheck) a ogni push e pull request.
+# Le Actions sono fissate a uno SHA (il commento indica la versione).
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Modulo WebAssembly
+        run: |
+          GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w" -o web/vault.wasm ./cmd/vaultwasm
+          cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js
+      - run: go vet ./...
+      - run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
