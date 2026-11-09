@@ -43,9 +43,9 @@ func (h *Hub) adminBrowseToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Enabled {
-		h.log.Printf(T("Esplorazione della cassaforte dal NAS attivata"))
+		h.log.Print(T("Esplorazione della cassaforte dal NAS attivata"))
 	} else {
-		h.log.Printf(T("Esplorazione della cassaforte dal NAS disattivata"))
+		h.log.Print(T("Esplorazione della cassaforte dal NAS disattivata"))
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

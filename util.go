@@ -122,8 +122,10 @@ func newRingLog(file string, max int) *ringLog {
 	return &ringLog{max: max, out: log.New(w, "", log.LstdFlags)}
 }
 
-func (r *ringLog) Printf(format string, a ...any) {
-	msg := fmt.Sprintf(format, a...)
+func (r *ringLog) Printf(format string, a ...any) { r.Print(fmt.Sprintf(format, a...)) }
+
+// Print registra un messaggio già pronto (nessuna formattazione: i testi tradotti possono contenere "%").
+func (r *ringLog) Print(msg string) {
 	r.out.Print(msg)
 	r.mu.Lock()
 	r.lines = append(r.lines, time.Now().Format("15:04:05")+"  "+msg)

@@ -149,7 +149,7 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	open := c.cip != nil
 	c.mu.Unlock()
 	if open {
-		c.log.Printf(T("Arresto del servizio: chiudo la cassaforte"))
+		c.log.Print(T("Arresto del servizio: chiudo la cassaforte"))
 		if err := c.Close(); err != nil {
 			c.log.Printf(T("Chiusura all'arresto non riuscita: %v"), err)
 		}

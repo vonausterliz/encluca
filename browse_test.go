@@ -174,7 +174,7 @@ WebAssembly.instantiate(fs.readFileSync(process.argv[3]), go.importObject).then(
   process.exit(0);
 });`
 	os.WriteFile(filepath.Join(dir, "run.js"), []byte(script), 0o600)
-	wasmExec := filepath.Join(runtime.GOROOT(), "misc", "wasm", "wasm_exec.js")
+	wasmExec := filepath.Join(runtime.GOROOT(), "lib", "wasm", "wasm_exec.js")
 	out, err := exec.Command(node, filepath.Join(dir, "run.js"), wasmExec, wasm, filepath.Join(dir, "fx.json")).CombinedOutput()
 	if err != nil {
 		t.Fatalf("node: %v\n%s", err, out)

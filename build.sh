@@ -7,7 +7,7 @@ rm -rf dist && mkdir -p dist
 
 # modulo WebAssembly per sfogliare la cassaforte dalla pagina del NAS (incluso nel binario)
 GOOS=js GOARCH=wasm go build -trimpath -ldflags "-s -w" -o web/vault.wasm ./cmd/vaultwasm
-cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" web/wasm_exec.js
+cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" web/wasm_exec.js
 
 build() { # os arch packaging-dir
   local os=$1 arch=$2 pkg=$3 ext="" ldflags="-s -w"

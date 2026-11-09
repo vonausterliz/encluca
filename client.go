@@ -258,9 +258,9 @@ func (c *Client) setOnline(on bool, msg string) {
 	defer c.mu.Unlock()
 	if on != c.online {
 		if on {
-			c.log.Printf(T("NAS raggiungibile"))
+			c.log.Print(T("NAS raggiungibile"))
 		} else {
-			c.log.Printf(T("NAS non raggiungibile: le modifiche restano in coda"))
+			c.log.Print(T("NAS non raggiungibile: le modifiche restano in coda"))
 		}
 	}
 	c.online = on
@@ -1128,7 +1128,7 @@ func (c *Client) CreateVault(password string) error {
 	}
 	resp.Body.Close()
 	writeFileAtomic(c.metaCache(), b, 0o600)
-	c.log.Printf(T("Cassaforte creata"))
+	c.log.Print(T("Cassaforte creata"))
 	return c.Open(password)
 }
 
@@ -1279,7 +1279,7 @@ func (c *Client) Close() error {
 		c.log.Printf("ATTENZIONE: %s", c.lastErr)
 		return errors.New(c.lastErr)
 	}
-	c.log.Printf(T("Cassaforte chiusa: cartella in chiaro cancellata"))
+	c.log.Print(T("Cassaforte chiusa: cartella in chiaro cancellata"))
 	return nil
 }
 
@@ -1386,7 +1386,7 @@ func (c *Client) run(ctx context.Context) {
 	go c.scanLoop(ctx)
 	c.mu.Lock()
 	if c.st.Open {
-		c.log.Printf(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))
+		c.log.Print(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))
 	}
 	c.mu.Unlock()
 }

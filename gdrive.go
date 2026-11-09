@@ -179,7 +179,7 @@ func (g *GDrive) runBackup(ctx context.Context, c GDriveConfig) {
 	g.prog = nil
 	if err != nil && ctx.Err() != nil {
 		g.dirty = true
-		g.h.log.Printf(T("Backup Google Drive interrotto per l'arresto: riprenderà al riavvio"))
+		g.h.log.Print(T("Backup Google Drive interrotto per l'arresto: riprenderà al riavvio"))
 	} else if err != nil {
 		g.lastErr = err.Error()
 		g.dirty = true // riprova al prossimo giro
@@ -302,7 +302,7 @@ func (g *GDrive) startDeviceAuth(c GDriveConfig) (map[string]any, error) {
 				g.pending = nil
 				g.lastErr = ""
 				g.mu.Unlock()
-				g.h.log.Printf(T("Google Drive autorizzato"))
+				g.h.log.Print(T("Google Drive autorizzato"))
 				g.kick()
 				return
 			}
@@ -501,7 +501,7 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 	// struttura cartelle
 	if g.st.RootID != "" {
 		if err := g.jsonCall(ctx, c, http.MethodGet, gDriveAPI+"/files/"+g.st.RootID+"?fields=id,trashed", nil, nil); isNotFound(err) {
-			g.h.log.Printf(T("Cartella di backup non più presente su Drive: la ricreo"))
+			g.h.log.Print(T("Cartella di backup non più presente su Drive: la ricreo"))
 			g.st = gdState{Folders: map[string]string{}, Files: map[string]*gdFile{}}
 		} else if err != nil {
 			return 0, 0, err
@@ -754,6 +754,6 @@ func (g *GDrive) apiDisconnect(w http.ResponseWriter, r *http.Request) {
 	g.mu.Lock()
 	g.access = ""
 	g.mu.Unlock()
-	g.h.log.Printf(T("Google Drive scollegato"))
+	g.h.log.Print(T("Google Drive scollegato"))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

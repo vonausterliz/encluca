@@ -668,7 +668,7 @@ func (h *Hub) adminPassword(w http.ResponseWriter, r *http.Request) {
 	h.setAdminPassword(body.New)
 	h.saveCfg()
 	os.Remove(filepath.Join(h.dir, "admin-password.txt"))
-	h.log.Printf(T("Password amministratore cambiata"))
+	h.log.Print(T("Password amministratore cambiata"))
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
