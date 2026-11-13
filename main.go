@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "0.1.7"
+var Version = "0.1.8"
 
 //go:embed web/*.html web/*.css web/*.js web/*.wasm
 var webFS embed.FS
@@ -60,6 +60,16 @@ Uso:
   encluca hub    [--data DIR] [--listen :8443]        servizio sul NAS (interfaccia su https://NAS:8443)
   encluca hub-reset-password [--data DIR]             genera una nuova password amministratore dell'hub
   encluca version
+
+Comandi per il client già in esecuzione (opzione comune: --data DIR):
+  encluca status [--json]                     stato della cassaforte e della sincronizzazione
+  encluca open                                apre la cassaforte (chiede la password; senza terminale la legge da stdin)
+  encluca close                               chiude la cassaforte
+  encluca sync                                sincronizza subito
+  encluca create                              crea la cassaforte (prima volta)
+  encluca pair [--name NOME] URL CODICE       collega questo computer al NAS
+  encluca confirm-deletes                     conferma le eliminazioni bloccate da inviare al NAS
+  encluca confirm-received-deletes            conferma le eliminazioni bloccate ricevute dal NAS
 `, Version)
 }
 
@@ -110,6 +120,12 @@ func main() {
 			fatal(err)
 		}
 	default:
+		if cliCommands[os.Args[1]] {
+			if err := runCLI(os.Args[1], os.Args[2:]); err != nil {
+				fatal(err)
+			}
+			return
+		}
 		usage()
 		os.Exit(2)
 	}
@@ -140,9 +156,19 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 		return err
 	}
 	c.run(ctx)
-	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandler(uiAddr)), ReadHeaderTimeout: 10 * time.Second}
+	uiToken := randHex(32)
+	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandlerToken(uiAddr, uiToken)), ReadHeaderTimeout: 10 * time.Second}
+	ln, err := net.Listen("tcp", uiAddr)
+	if err != nil {
+		return err
+	}
+	// solo ora che la porta è nostra: i comandi da terminale (encluca status, open...) usano questo token
+	if err := writeCLIEndpoint(dir, uiAddr, uiToken); err != nil {
+		c.log.Printf(T("Token per i comandi da terminale non salvato: %v"), err)
+	}
+	defer os.Remove(cliTokenPath(dir))
 	errc := make(chan error, 1)
-	go func() { errc <- srv.ListenAndServe() }()
+	go func() { errc <- srv.Serve(ln) }()
 	c.log.Printf(T("Encluca %s avviato: apri http://%s"), Version, uiAddr)
 	select {
 	case err := <-errc:
@@ -165,14 +191,16 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	return nil
 }
 
-func (c *Client) uiHandler(uiAddr string) http.Handler {
+func (c *Client) uiHandler(uiAddr string) http.Handler { return c.uiHandlerToken(uiAddr, randHex(32)) }
+
+// uiHandlerToken serve interfaccia e API locale.
+// uiToken è il segreto della sessione: è scritto solo nella pagina servita a chi apre
+// http://127.0.0.1:8484 (e in cli-token.json, 0600, per i comandi da terminale) e ogni chiamata
+// /api/ lo deve rimandare. Un sito web aperto nel browser non può leggere la pagina (stessa
+// origine), quindi non può comandare il client neppure se trovasse un modo di aggirare gli altri controlli.
+func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	_, port, _ := net.SplitHostPort(uiAddr)
 	allowedHosts := map[string]bool{"127.0.0.1:" + port: true, "localhost:" + port: true, "[::1]:" + port: true}
-	// token segreto della sessione dell'interfaccia: è scritto solo nella pagina servita a chi
-	// apre http://127.0.0.1:8484 e ogni chiamata /api/ lo deve rimandare. Un sito web aperto nel
-	// browser non può leggere la pagina (stessa origine), quindi non può comandare il client
-	// neppure se un domani trovasse un modo di aggirare gli altri controlli.
-	uiToken := randHex(32)
 	mux := http.NewServeMux()
 	post := func(fn func(r *http.Request) (any, error)) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {

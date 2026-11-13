@@ -25,6 +25,23 @@ tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo program
 
 Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio la chiude da solo. Su Windows, al riavvio, l'app ti mostra "Cassaforte rimasta aperta": inserisci la password per riprendere e poi chiudi.
 
+### Da terminale (senza interfaccia web)
+
+Con il servizio client in esecuzione puoi fare tutto anche da riga di comando:
+
+```
+encluca status            # stato (aggiungi --json per gli script)
+encluca open              # chiede la password senza mostrarla
+encluca close
+encluca sync              # sincronizza subito
+encluca pair [--name NOME] https://NAS:8443 CODICE
+encluca create            # crea la cassaforte (prima volta)
+encluca confirm-deletes             # conferma eliminazioni bloccate da inviare
+encluca confirm-received-deletes    # conferma eliminazioni bloccate ricevute
+```
+
+Negli script la password si può passare da standard input (`encluca open < file-protetto`), mai come argomento. I comandi usano il file `cli-token.json` (permessi 0600) che il servizio scrive nella sua cartella dati all'avvio e cancella all'arresto.
+
 ## Installazione
 
 ### 1. NAS (TrueNAS Community Edition)
