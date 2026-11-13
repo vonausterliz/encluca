@@ -40,6 +40,8 @@ In breve:
 3. **Primo PC.** Crea la cassaforte con la tua password. Sugli altri PC aprila con la stessa password.
 4. **Google Drive** (facoltativo). Collegalo dall'interfaccia del NAS.
 
+**Aggiornamenti:** dalla 0.2.0 i computer si aggiornano da soli, solo con rilasci firmati e solo a cassaforte chiusa (si può disattivare dall'interfaccia). La prima 0.2.0 va installata a mano. L'hub si aggiorna da TrueNAS: Apps → encluca → Stop, poi Start. Come si pubblica un rilascio firmato: [docs/RILASCIO.md](docs/RILASCIO.md).
+
 I dettagli d'uso, la sicurezza, i limiti e il recupero d'emergenza sono nel [LEGGIMI](LEGGIMI.md).
 
 > ⚠️ **La password della cassaforte non è recuperabile.** Se la perdi, i dati restano illeggibili per sempre. Conservala in un password manager.

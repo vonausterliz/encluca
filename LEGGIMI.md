@@ -100,6 +100,12 @@ L'API di Google Drive è gratuita e non richiede la fatturazione. L'unico limite
 - I file modificati o cancellati non vengono persi: la vecchia copia viene spostata in `_versioni/<data-ora>/` e conservata per il numero di giorni scelto (30 di default).
 - L'app vede solo la propria cartella su Drive (scope `drive.file`), non il resto del tuo Drive.
 
+### 4. Aggiornamenti
+
+- **Computer:** dalla 0.2.0 il client si aggiorna da solo. Controlla le nuove versioni all'avvio e poi ogni 6 ore, e installa **solo rilasci firmati** (firma ed25519 verificata con la chiave incorporata nel programma), mai versioni più vecchie, e **solo a cassaforte chiusa**. Dopo l'installazione il servizio si riavvia da solo. Puoi disattivarlo in *Impostazioni → Aggiornamenti automatici*.
+- **La prima 0.2.0 va installata a mano** su ogni computer, come le versioni precedenti: i client 0.1.x non sanno aggiornarsi.
+- **NAS:** l'hub non si aggiorna da solo. Quando c'è una versione nuova, la sua pagina lo segnala. Per aggiornare: TrueNAS → Apps → encluca → **Stop**, poi **Start**.
+
 ## ⚠️ La password
 
 **Non è recuperabile.** Se la perdi, i dati sono illeggibili per sempre, sia sul NAS sia su Google Drive. Conservala in un password manager e, se vuoi, su carta in un posto sicuro.
