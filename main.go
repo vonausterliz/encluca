@@ -170,14 +170,19 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	if err != nil {
 		return err
 	}
-	setupClientUpdater(c, dir)
 	c.run(ctx)
 	uiToken := randHex(32)
 	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandlerToken(uiAddr, uiToken)), ReadHeaderTimeout: 10 * time.Second}
 	// dopo un riavvio per aggiornamento la porta può essere ancora del processo precedente
-	ln, err := listenRetry(uiAddr, 20, 500*time.Millisecond)
+	ln, err := listenRetry(uiAddr, uiListenTries, 500*time.Millisecond)
 	if err != nil {
 		return err
+	}
+	// solo l'istanza che ha la porta gestisce l'aggiornamento: un secondo client
+	// avviato per errore non deve toccare il pacchetto pronto né il programma
+	setupClientUpdater(c, dir)
+	if c.upd != nil {
+		go c.updateLoop(ctx)
 	}
 	// solo ora che la porta è nostra: i comandi da terminale (encluca status, open...) usano questo token
 	if err := writeCLIEndpoint(dir, uiAddr, uiToken); err != nil {
@@ -233,6 +238,8 @@ func setupClientUpdater(c *Client, dir string) {
 	c.upd = u
 	clientExe = u.exe
 }
+
+var uiListenTries = 20 // tentativi di ascolto (variabile per i test)
 
 // clientExe è il percorso reale del programma (senza collegamenti): su Windows,
 // dopo la sostituzione, os.Executable punterebbe al vecchio file rinominato.

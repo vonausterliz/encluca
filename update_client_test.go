@@ -264,3 +264,70 @@ func TestAutoUpdateAPIRequiresToken(t *testing.T) {
 		t.Fatal("impostazione cambiata senza token")
 	}
 }
+
+// Revisione finale, Important 1: un'installazione fallita non deve ripetersi
+// ogni 30 s per sempre; l'errore va nello stato e il pacchetto si riscarica.
+func TestInstallFailureDiscardsAndReports(t *testing.T) {
+	c := newBareClient(t)
+	u := stagedUpdater(t, "0.2.0", "0.2.1", "0.2.0")
+	os.Remove(u.stagedPath) // pacchetto sparito dopo la preparazione
+	c.upd = u
+	count := func() int {
+		n := 0
+		for _, l := range c.log.Lines() {
+			if strings.Contains(l, "non riuscita") {
+				n++
+			}
+		}
+		return n
+	}
+	c.tryInstallUpdate()
+	c.tryInstallUpdate()
+	if c.updating {
+		t.Fatal("updating rimasto vero")
+	}
+	if st := u.state(); st.Staged != "" || st.Error == "" {
+		t.Fatalf("stato: %+v", st)
+	}
+	if n := count(); n != 1 {
+		t.Fatalf("%d righe di errore, attesa 1", n)
+	}
+	select {
+	case <-c.restart:
+		t.Fatal("riavvio chiesto dopo un'installazione fallita")
+	default:
+	}
+}
+
+// Revisione finale, Important 2: un secondo client che non ottiene la porta
+// non deve toccare l'aggiornamento preparato dal primo.
+func TestSecondInstanceKeepsStagedUpdate(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy.Close()
+	dir := filepath.Join(t.TempDir(), "data")
+	staged := filepath.Join(dir, "update", exeFileName(runtime.GOOS))
+	os.MkdirAll(filepath.Dir(staged), 0o700)
+	os.WriteFile(staged, []byte("pronto"), 0o755)
+	old := uiListenTries
+	uiListenTries = 2
+	defer func() { uiListenTries = old }()
+	if err := runClient(t.Context(), dir, busy.Addr().String()); err == nil {
+		t.Fatal("secondo client avviato su porta occupata")
+	}
+	if _, err := os.Stat(staged); err != nil {
+		t.Fatal("il secondo client ha cancellato l'aggiornamento preparato")
+	}
+}
+
+// Su Windows la prova del nuovo programma deve usare un nome .exe.
+func TestCheckBinaryNameExe(t *testing.T) {
+	if !strings.HasSuffix(checkBinName("windows"), ".exe") {
+		t.Fatalf("windows: %s", checkBinName("windows"))
+	}
+	if strings.HasSuffix(checkBinName("linux"), ".exe") {
+		t.Fatalf("linux: %s", checkBinName("linux"))
+	}
+}

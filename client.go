@@ -1602,9 +1602,6 @@ func (c *Client) run(ctx context.Context) {
 	go c.pullLoop(ctx)
 	go c.pushLoop(ctx)
 	go c.scanLoop(ctx)
-	if c.upd != nil {
-		go c.updateLoop(ctx)
-	}
 	c.mu.Lock()
 	if c.st.Open {
 		c.log.Print(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))

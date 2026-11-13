@@ -350,6 +350,14 @@ func download(ctx context.Context, hc *http.Client, url, path string, max int64)
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
+// checkBinName: su Windows il programma da provare deve avere l'estensione .exe.
+func checkBinName(goos string) string {
+	if goos == "windows" {
+		return "encluca-check.exe"
+	}
+	return "encluca-check.tmp"
+}
+
 func exeFileName(goos string) string {
 	if goos == "windows" {
 		return "encluca-new.exe"
@@ -406,7 +414,7 @@ func (u *updater) prepare(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	tmpArchive := filepath.Join(u.dir, "archive.tmp")
-	tmpBin := filepath.Join(u.dir, "encluca-check.tmp")
+	tmpBin := filepath.Join(u.dir, checkBinName(u.goos))
 	ok := false
 	defer func() {
 		os.Remove(tmpArchive)
@@ -510,6 +518,14 @@ func (u *updater) discardStaged() {
 	u.st.Staged, u.stagedPath = "", ""
 }
 
+// failInstall scarta il pacchetto pronto e riporta l'errore nello stato.
+func (u *updater) failInstall(err error) {
+	u.discardStaged()
+	u.mu.Lock()
+	u.st.Error = err.Error()
+	u.mu.Unlock()
+}
+
 // installedVersion è la versione del programma su disco (può essere più nuova
 // di quella in esecuzione se è stato aggiornato a mano); "" se non si legge.
 func (u *updater) installedVersion() string {
@@ -591,6 +607,9 @@ func (c *Client) tryInstallUpdate() {
 	}
 	c.log.Printf(T("Installo l'aggiornamento %s e riavvio il servizio"), staged)
 	if _, _, err := c.upd.install(); err != nil {
+		// si scarta il pacchetto: il prossimo controllo (6 h) lo riscarica da capo,
+		// invece di ritentare ogni 30 s per sempre
+		c.upd.failInstall(err)
 		c.mu.Lock()
 		c.updating = false
 		c.mu.Unlock()
