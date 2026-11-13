@@ -61,7 +61,8 @@ type clientConfig struct {
 	Fingerprint string `json:"fingerprint"`
 	DeviceName  string `json:"deviceName"`
 	WorkDir     string `json:"workDir"`
-	Lang        string `json:"lang,omitempty"` // lingua dell'interfaccia e dei messaggi: "it" | "en"
+	Lang        string `json:"lang,omitempty"`       // lingua dell'interfaccia e dei messaggi: "it" | "en"
+	AutoUpdate  *bool  `json:"autoUpdate,omitempty"` // nil = attivo (config 0.1.x)
 }
 
 type plainSnap struct {
@@ -1567,7 +1568,7 @@ func (c *Client) Status() map[string]any {
 		"open": c.cip != nil, "staleOpen": c.cip == nil && c.st.Open, "workDir": c.cfg.WorkDir,
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
 		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
-		"log": c.log.Lines(),
+		"log": c.log.Lines(), "update": c.updateStatusLocked(),
 	}
 }
 

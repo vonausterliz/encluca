@@ -609,6 +609,17 @@ const (
 	updateInstallEvery = 30 * time.Second
 )
 
+// updateCycle controlla (se attivo) e prova a installare.
+func (c *Client) updateCycle(ctx context.Context) {
+	if !c.autoUpdateOn() {
+		return
+	}
+	if err := c.upd.check(ctx); err != nil && ctx.Err() == nil {
+		c.log.Printf(T("Controllo degli aggiornamenti non riuscito: %v"), err)
+	}
+	c.tryInstallUpdate()
+}
+
 func (c *Client) updateLoop(ctx context.Context) {
 	checkT := time.NewTimer(0)
 	defer checkT.Stop()
@@ -619,13 +630,44 @@ func (c *Client) updateLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-checkT.C:
-			if err := c.upd.check(ctx); err != nil && ctx.Err() == nil {
-				c.log.Printf(T("Controllo degli aggiornamenti non riuscito: %v"), err)
-			}
+			c.updateCycle(ctx)
 			checkT.Reset(updateCheckEvery)
-			c.tryInstallUpdate()
 		case <-inst.C:
-			c.tryInstallUpdate()
+			if c.autoUpdateOn() {
+				c.tryInstallUpdate()
+			}
 		}
 	}
+}
+
+func (c *Client) autoUpdateOn() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cfg.AutoUpdate == nil || *c.cfg.AutoUpdate
+}
+
+func (c *Client) SetAutoUpdate(on bool) error {
+	c.mu.Lock()
+	c.cfg.AutoUpdate = &on
+	err := saveJSON(c.cfgPath(), &c.cfg)
+	c.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	if on {
+		c.log.Print(T("Aggiornamenti automatici attivati"))
+	} else {
+		c.log.Print(T("Aggiornamenti automatici disattivati"))
+	}
+	return nil
+}
+
+// updateStatusLocked è lo stato per l'interfaccia (c.mu già preso).
+func (c *Client) updateStatusLocked() updateState {
+	if c.upd == nil {
+		return updateState{Current: Version, Error: T("aggiornamento automatico non disponibile su questa installazione")}
+	}
+	st := c.upd.state()
+	st.Enabled = c.cfg.AutoUpdate == nil || *c.cfg.AutoUpdate
+	return st
 }

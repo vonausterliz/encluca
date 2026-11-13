@@ -2,6 +2,8 @@ package main
 
 import (
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -187,4 +189,78 @@ func TestListenRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	ln.Close()
+}
+
+func TestAutoUpdateDefaultOn(t *testing.T) {
+	c := newBareClient(t)
+	if !c.autoUpdateOn() {
+		t.Fatal("aggiornamenti automatici spenti di predefinito")
+	}
+	// config 0.1.x senza il campo
+	os.WriteFile(c.cfgPath(), []byte(`{"hubUrl":"","workDir":"/tmp/x"}`), 0o600)
+	c2, err := newClient(c.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c2.autoUpdateOn() {
+		t.Fatal("config vecchia: aggiornamenti spenti")
+	}
+}
+
+func TestSetAutoUpdatePersists(t *testing.T) {
+	c := newBareClient(t)
+	u, f, priv := newTestUpdater(t, "0.2.0")
+	f.release(t, priv, "v0.2.1", "0.2.1", "0.2.1")
+	c.upd = u
+	if err := c.SetAutoUpdate(false); err != nil {
+		t.Fatal(err)
+	}
+	c2, err := newClient(c.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2.autoUpdateOn() || c.autoUpdateOn() {
+		t.Fatal("impostazione non salvata")
+	}
+	raw, _ := os.ReadFile(c.cfgPath())
+	if !strings.Contains(string(raw), `"autoUpdate": false`) && !strings.Contains(string(raw), `"autoUpdate":false`) {
+		t.Fatalf("config: %s", raw)
+	}
+	c.updateCycle(t.Context())
+	if n := f.apiCalls.Load(); n != 0 {
+		t.Fatalf("%d controlli con gli aggiornamenti spenti", n)
+	}
+	if st := c.Status()["update"].(updateState); st.Enabled {
+		t.Fatalf("stato: %+v", st)
+	}
+	if err := c.SetAutoUpdate(true); err != nil {
+		t.Fatal(err)
+	}
+	c.updateCycle(t.Context())
+	if n := f.apiCalls.Load(); n != 1 {
+		t.Fatalf("%d controlli con gli aggiornamenti accesi", n)
+	}
+	if st := c.Status()["update"].(updateState); !st.Enabled || st.Current != "0.2.0" {
+		t.Fatalf("stato: %+v", st)
+	}
+}
+
+func TestAutoUpdateAPIRequiresToken(t *testing.T) {
+	c := newBareClient(t)
+	srv := httptest.NewServer(securityHeaders(c.uiHandler("127.0.0.1:8484")))
+	defer srv.Close()
+	req, _ := http.NewRequest("POST", srv.URL+"/api/autoupdate", strings.NewReader(`{"On":false}`))
+	req.Host = "127.0.0.1:8484"
+	req.Header.Set("X-Encluca", "1")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("senza token: %d", resp.StatusCode)
+	}
+	if !c.autoUpdateOn() {
+		t.Fatal("impostazione cambiata senza token")
+	}
 }

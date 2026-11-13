@@ -224,4 +224,7 @@ var enMessages = map[string]string{
 	"aggiornamento in corso: riprova tra qualche secondo":                                                "update in progress: try again in a few seconds",
 	"Aggiornamento installato: %s → %s":                                                                  "Update installed: %s → %s",
 	"Aggiornamento automatico non disponibile: %v":                                                       "Automatic update unavailable: %v",
+	"Aggiornamenti automatici attivati":                                                                  "Automatic updates enabled",
+	"Aggiornamenti automatici disattivati":                                                               "Automatic updates disabled",
+	"aggiornamento automatico non disponibile su questa installazione":                                   "automatic update not available on this installation",
 }

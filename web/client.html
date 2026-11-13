@@ -126,6 +126,8 @@ ul.alerts li:last-child{border-bottom:0}
       <div class="card-body">
         <label for="langSel" style="margin-top:0">Lingua / Language</label>
         <select id="langSel"><option value="it">Italiano</option><option value="en">English</option></select>
+        <label class="check" style="margin-top:20px"><input type="checkbox" id="auEnable"> Aggiornamenti automatici</label>
+        <div id="auInfo" style="color:var(--fg1);margin-top:6px;font-size:13px"></div>
         <div id="vaultSettings">
         <label for="workDir">Cartella in cui aprire la cassaforte</label>
         <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
@@ -183,6 +185,9 @@ const EN = {
  "Applica l'eliminazione":'Apply the deletion','Eliminare davvero questi file anche da questo computer?':'Really delete these files from this computer too?',
  "Un altro dispositivo ha eliminato {n} file tutti insieme. Su questo computer non li ho ancora eliminati. Se è stato fatto apposta, applica l'eliminazione; altrimenti ripristinali dal cestino nella pagina del NAS.":'Another device deleted {n} files all at once. They have not been deleted on this computer yet. If it was intentional, apply the deletion; otherwise restore them from the trash on the NAS page.',
  'Lingua / Language':'Lingua / Language','Italiano':'Italiano','English':'English',
+ 'Aggiornamenti automatici':'Automatic updates','Versione installata: {v}':'Installed version: {v}','Versione disponibile: {v}':'Available version: {v}',
+ 'Si installa alla chiusura della cassaforte':'It will be installed when the vault is closed','Ultimo controllo: {t}':'Last check: {t}','mai':'never',
+ 'Si installano solo rilasci firmati e solo a cassaforte chiusa.':'Only signed releases are installed, and only while the vault is closed.',
 };
 let S = null, forcePair = false;
 const UI_TOKEN = document.querySelector('meta[name="encluca-token"]').content;
@@ -280,6 +285,7 @@ function render(){
   if(document.activeElement !== $('workDir')) $('workDir').value = s.workDir;
   $('hubInfo').textContent = s.paired ? s.hubUrl : t('nessuno');
   $('log').textContent = (s.log||[]).join('\n');
+  renderUpdate(s.update || {});
 }
 let renKey = null;
 function onLangChange(){ renKey = null; if(S) render(); }
@@ -344,6 +350,21 @@ $('langSel').onchange = async () => {
   const l = $('langSel').value;
   try{ await api('/api/lang', {Lang:l}); setLangUI(l); refresh(); }catch(e){ $('setMsg').textContent = e.message; }
 };
+function renderUpdate(u){
+  if(document.activeElement !== $('auEnable')) $('auEnable').checked = !!u.enabled;
+  const box = $('auInfo'); box.textContent = '';
+  const line = (txt, color) => { const d = document.createElement('div'); d.textContent = txt; if(color) d.style.color = color; box.appendChild(d); };
+  line(t('Versione installata: {v}', {v: u.current || S.version}));
+  if(u.available) line(t('Versione disponibile: {v}', {v: u.available}));
+  if(u.staged) line(t('Si installa alla chiusura della cassaforte'), 'var(--yellow)');
+  if(u.enabled){
+    const lc = (!u.lastCheck || u.lastCheck.startsWith('0001')) ? t('mai') : new Date(u.lastCheck).toLocaleString(LOCALE());
+    line(t('Ultimo controllo: {t}', {t: lc}));
+  }
+  if(u.error) line(u.error, 'var(--red)');
+  line(t('Si installano solo rilasci firmati e solo a cassaforte chiusa.'));
+}
+$('auEnable').onchange = () => api('/api/autoupdate', {On: $('auEnable').checked}).then(refresh).catch(e => { $('setMsg').textContent = e.message; refresh(); });
 $('massBtn').onclick = () => api('/api/confirm-deletes',{}).then(refresh);
 $('recvMassBtn').onclick = () => { if(confirm(t('Eliminare davvero questi file anche da questo computer?'))) api('/api/confirm-recv-deletes',{}).then(refresh); };
 const updMeter = pwMeter($('pw'), $('pwMeterBox'));

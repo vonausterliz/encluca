@@ -270,6 +270,7 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	}
 	type body struct {
 		Password, Code, HubURL, Name, Dir, Path, Lang string
+		On                                            bool
 	}
 	parse := func(r *http.Request) body {
 		var b body
@@ -290,6 +291,7 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	mux.HandleFunc("/api/confirm-deletes", post(func(r *http.Request) (any, error) { c.ConfirmDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/confirm-recv-deletes", post(func(r *http.Request) (any, error) { c.ConfirmRecvDeletes(); return nil, nil }))
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
+	mux.HandleFunc("/api/autoupdate", post(func(r *http.Request) (any, error) { return nil, c.SetAutoUpdate(parse(r).On) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
