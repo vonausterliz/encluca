@@ -227,4 +227,6 @@ var enMessages = map[string]string{
 	"Aggiornamenti automatici attivati":                                                                  "Automatic updates enabled",
 	"Aggiornamenti automatici disattivati":                                                               "Automatic updates disabled",
 	"aggiornamento automatico non disponibile su questa installazione":                                   "automatic update not available on this installation",
+	"Controllo delle nuove versioni non riuscito: %v":                                                    "New version check failed: %v",
+	"Nuova versione disponibile: %s (aggiorna da TrueNAS: Apps → encluca → Stop, poi Start)":             "New version available: %s (update from TrueNAS: Apps → encluca → Stop, then Start)",
 }

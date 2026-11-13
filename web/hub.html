@@ -56,6 +56,13 @@
         <div class="stat"><span>Ultimo backup</span><b id="nBackup">–</b><small id="nBackupWhen" class="hint"></small></div>
       </div>
 
+      <div class="card warn hidden" id="updWarn">
+        <div class="card-header"><h2>Nuova versione disponibile: <span id="updVer" data-noi18n></span></h2><span class="chip wait">Da fare</span></div>
+        <div class="card-body">
+          <p>Per aggiornare: TrueNAS → Apps → encluca → Stop, poi Start. L'hub non si aggiorna da solo; i computer si aggiornano automaticamente.</p>
+        </div>
+      </div>
+
       <div class="card warn hidden" id="pwWarn">
         <div class="card-header"><h2>Cambia la password iniziale</h2><span class="chip wait">Da fare</span></div>
         <div class="card-body">
@@ -190,6 +197,8 @@ const EN = {
  'Accedi':'Log in','Esci':'Log out','Sezioni':'Sections','Panoramica':'Overview','Dispositivi':'Devices','Backup Google Drive':'Google Drive backup',
  'Impostazioni':'Settings','Registro':'Log','encluca › Hub':'encluca › Hub','File cifrati':'Encrypted files','Spazio occupato':'Space used','Cassaforte':'Vault',
  'Cambia la password iniziale':'Change the initial password','Da fare':'To do',
+ 'Nuova versione disponibile:':'New version available:',
+ "Per aggiornare: TrueNAS → Apps → encluca → Stop, poi Start. L'hub non si aggiorna da solo; i computer si aggiornano automaticamente.":'To update: TrueNAS → Apps → encluca → Stop, then Start. The hub does not update itself; computers update automatically.',
  'Stai usando la password generata al primo avvio. Scegline una tua: il file che contiene quella iniziale verrà cancellato.':'You are using the password generated on first start. Choose your own: the file containing the initial one will be deleted.',
  'Password attuale':'Current password','Nuova password (min. 14 caratteri)':'New password (min. 14 characters)','Cestino':'Trash','Vuoto':'Empty','{n} file':'{n} files',
  'I file eliminati da un computer restano qui, cifrati, per 30 giorni. Se sono spariti per errore (o per un virus), ripristinali: tornano su tutti i dispositivi.':'Files deleted from a computer stay here, encrypted, for 30 days. If they disappeared by mistake (or because of a virus), restore them: they come back on every device.',
@@ -273,6 +282,8 @@ async function refresh(){
   $('nFiles').textContent = s.files; $('nSize').textContent = size(s.bytes); $('nDev').textContent = s.devices.length;
   $('nVault').textContent = s.vaultCreated ? t('creata') : t('da creare');
   $('pwWarn').classList.toggle('hidden', !s.defaultPassword);
+  $('updWarn').classList.toggle('hidden', !s.latestVersion);
+  $('updVer').textContent = s.latestVersion ? 'v' + s.latestVersion : '';
   const tb = $('devs'); tb.innerHTML = '';
   if(!s.devices.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="3" class="empty"></td>'; tr.firstChild.textContent=t('Nessun dispositivo: aggiungi il primo computer qui sotto.'); tb.append(tr); }
   for(const d of s.devices){

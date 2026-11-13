@@ -671,3 +671,41 @@ func (c *Client) updateStatusLocked() updateState {
 	st.Enabled = c.cfg.AutoUpdate == nil || *c.cfg.AutoUpdate
 	return st
 }
+
+// ---- avviso sull'hub ----
+
+// checkLatest legge solo il numero dell'ultima versione pubblicata (niente download).
+func (h *Hub) checkLatest(ctx context.Context, hc *http.Client, api string) {
+	v, _, err := fetchLatest(ctx, hc, api, Version)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err != nil {
+		h.latest = ""
+		if !h.latestFail && ctx.Err() == nil {
+			h.latestFail = true
+			h.log.Printf(T("Controllo delle nuove versioni non riuscito: %v"), err)
+		}
+		return
+	}
+	h.latestFail = false
+	if newerVersion(v, Version) && v != h.latest {
+		h.log.Printf(T("Nuova versione disponibile: %s (aggiorna da TrueNAS: Apps → encluca → Stop, poi Start)"), v)
+	}
+	h.latest = v
+}
+
+func (h *Hub) latestLoop(ctx context.Context) {
+	api := defaultUpdateAPI
+	if v := os.Getenv("ENCLUCA_UPDATE_API"); v != "" {
+		api = v
+	}
+	hc := newUpdateHTTPClient()
+	for {
+		h.checkLatest(ctx, hc, api)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(updateCheckEvery):
+		}
+	}
+}

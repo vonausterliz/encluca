@@ -88,6 +88,8 @@ type Hub struct {
 	limiter     *ipLimiter
 	scryptSem   chan struct{}
 	trash       []trashItem
+	latest      string // ultima versione pubblicata (solo per l'avviso: l'hub non si aggiorna da solo)
+	latestFail  bool   // errore del controllo già registrato
 }
 
 func (h *Hub) vaultDir() string  { return filepath.Join(h.dir, "vault") }
@@ -638,15 +640,20 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	seq := h.idx.Seq
 	browse := h.cfg.BrowseEnabled
 	trash := h.trashStatsLocked()
+	latest := h.latest
 	h.mu.Unlock()
 	_, metaErr := os.Stat(h.metaPath())
 	_, pwFileErr := os.Stat(filepath.Join(h.dir, "admin-password.txt"))
-	writeJSON(w, http.StatusOK, map[string]any{
+	res := map[string]any{
 		"version": Version, "files": files, "bytes": size, "seq": seq,
 		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint, "browseEnabled": browse,
 		"defaultPassword": pwFileErr == nil, "lang": getLang(),
 		"gdrive": h.gd.status(), "trash": trash, "log": h.log.Lines(),
-	})
+	}
+	if newerVersion(latest, Version) {
+		res["latestVersion"] = latest
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
@@ -821,6 +828,7 @@ func (h *Hub) run(ctx context.Context) error {
 		defer close(gdDone)
 		h.gd.loop(ctx)
 	}()
+	go h.latestLoop(ctx)
 	go func() {
 		<-ctx.Done()
 		sctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
