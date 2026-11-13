@@ -3,6 +3,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 VERSION="$(grep -oP 'Version = "\K[^"]+' main.go)"
+SIGNING_KEY="${ENCLUCA_SIGNING_KEY:-$HOME/.config/encluca-release/signing.key}"
+if [ ! -f "$SIGNING_KEY" ]; then
+  echo "errore: chiave di firma non trovata in $SIGNING_KEY: i rilasci devono essere firmati" >&2
+  exit 1
+fi
 rm -rf dist && mkdir -p dist
 
 # modulo WebAssembly per sfogliare la cassaforte dalla pagina del NAS (incluso nel binario)
@@ -39,4 +44,7 @@ build windows amd64 windows
 # il pacchetto per TrueNAS è il binario linux-amd64 + il compose
 cp packaging/truenas/docker-compose.yaml dist/encluca-$VERSION-linux-amd64/
 tar -C dist -czf "dist/encluca-$VERSION-linux-amd64.tar.gz" "encluca-$VERSION-linux-amd64"
-ls -lh dist/*.tar.gz dist/*.zip
+# impronte firmate: il client accetta un aggiornamento solo se la firma è valida
+(cd dist && sha256sum *.tar.gz *.zip > SHA256SUMS)
+ENCLUCA_SIGNING_KEY="$SIGNING_KEY" go run ./cmd/sign sign dist/SHA256SUMS
+ls -lh dist/*.tar.gz dist/*.zip dist/SHA256SUMS*
