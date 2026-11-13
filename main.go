@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "0.1.8"
+var Version = "0.1.9"
 
 //go:embed web/*.html web/*.css web/*.js web/*.wasm
 var webFS embed.FS
@@ -74,6 +74,10 @@ Comandi per il client già in esecuzione (opzione comune: --data DIR):
 }
 
 func main() {
+	// tutto tranne il servizio "client" (che gira senza finestra) scrive sul terminale chiamante
+	if len(os.Args) < 2 || os.Args[1] != "client" {
+		attachParentConsole()
+	}
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(2)

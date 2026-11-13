@@ -1,6 +1,6 @@
 # Immagine dell'hub encluca per TrueNAS (o qualunque host Docker).
 # Fase 1: compilazione statica dal sorgente, per l'architettura di destinazione.
-FROM --platform=$BUILDPLATFORM golang:1.27.3-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src
