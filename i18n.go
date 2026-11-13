@@ -200,4 +200,12 @@ var enMessages = map[string]string{
 	"Ripristinati dal cestino: %d file":                                     "Restored from trash: %d files",
 	"sessione dell'interfaccia scaduta: ricarica la pagina":                 "interface session expired: reload the page",
 	"troppi tentativi errati: riprova tra qualche minuto":                   "too many failed attempts: try again in a few minutes",
+	// aggiornamento automatico
+	"firma dell'aggiornamento illeggibile":                    "unreadable update signature",
+	"firma dell'aggiornamento non valida":                     "invalid update signature",
+	"riga non valida nell'elenco delle impronte: %q":          "invalid line in the checksum list: %q",
+	"elenco delle impronte vuoto":                             "empty checksum list",
+	"il programma nel pacchetto è troppo grande":              "the program in the package is too large",
+	"il pacchetto non contiene %s":                            "the package does not contain %s",
+	"il programma nel pacchetto è troppo grande o incompleto": "the program in the package is too large or incomplete",
 }
