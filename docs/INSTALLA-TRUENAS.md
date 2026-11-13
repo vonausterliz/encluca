@@ -168,7 +168,7 @@ L'hub è pronto. Il seguito, cioè client e Google Drive, è descritto nel [LEGG
 
 ## Aggiornare a una nuova versione
 
-*Apps → encluca → **Restart***. Al riavvio TrueNAS scarica l'ultima versione dell'immagine. Ricarica la pagina dell'hub e controlla il numero di versione in alto a destra.
+*Apps → encluca → **Stop***, attendi *Stopped*, poi **Start**. Alla ripartenza TrueNAS ricrea il container e, grazie a `pull_policy: always`, scarica l'ultima versione dell'immagine (*Restart* potrebbe riavviare il container esistente senza scaricarla). Ricarica la pagina dell'hub e controlla il numero di versione in alto a destra.
 
 Se la versione non cambia, vai in *Apps → encluca → **Edit*** e premi **Save** senza modificare nulla: TrueNAS ricrea il container scaricando l'immagine.
 

@@ -55,7 +55,7 @@ Negli script la password si può passare da standard input (`encluca open < file
    Se la porta 8443 è già usata da un'altra app, cambia il numero a sinistra (es. `"18443:8443"`) e, in `x-portals`, `port: 18443`.
 4. Apri `https://IP-DEL-NAS:8443`. Il browser avviserà che il certificato è autofirmato: è normale, accetta. Accedi con la password iniziale, che trovi in `data/admin-password.txt` o nel registro dell'app. **Cambiala subito.**
 
-**Aggiornare:** *Apps → encluca → Restart*. L'app usa l'immagine `ghcr.io/vonausterliz/encluca:latest` e a ogni avvio scarica l'ultima versione.
+**Aggiornare:** *Apps → encluca → Stop*, poi *Start*. L'app usa l'immagine `ghcr.io/vonausterliz/encluca:latest` e a ogni avvio scarica l'ultima versione.
 
 > In alternativa, su qualunque server Linux: `./install.sh hub`.
 
