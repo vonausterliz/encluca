@@ -119,6 +119,10 @@ type Client struct {
 	recentDels   []time.Time // eliminazioni ricevute di recente (finestra di recvDelWindow)
 	busy         string
 	pullReset    chan struct{}
+
+	upd      *updater      // nil se l'aggiornamento automatico non è disponibile
+	updating bool          // installazione in corso: la cassaforte non si apre
+	restart  chan struct{} // segnala a runClient di riavviare il servizio
 }
 
 func (c *Client) cfgPath() string   { return filepath.Join(c.dir, "config.json") }
@@ -131,7 +135,7 @@ func (c *Client) mirrorPath(enc string) string {
 }
 
 func newClient(dir string) (*Client, error) {
-	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}, renames: map[string]string{}}
+	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), restart: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}, renames: map[string]string{}}
 	for _, d := range []string{dir, c.mirrorDir(), c.tmpDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
@@ -1337,6 +1341,12 @@ func (c *Client) CreateVault(password string) error {
 }
 
 func (c *Client) Open(password string) error {
+	c.mu.Lock()
+	updating := c.updating
+	c.mu.Unlock()
+	if updating {
+		return errors.New(T("aggiornamento in corso: riprova tra qualche secondo"))
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var m *vaultMeta
@@ -1368,6 +1378,9 @@ func (c *Client) Open(password string) error {
 	defer c.mu.Unlock()
 	if c.cip != nil {
 		return nil
+	}
+	if c.updating { // l'installazione è iniziata mentre si verificava la password
+		return errors.New(T("aggiornamento in corso: riprova tra qualche secondo"))
 	}
 	work := c.cfg.WorkDir
 	recovering := c.st.Open
@@ -1588,6 +1601,9 @@ func (c *Client) run(ctx context.Context) {
 	go c.pullLoop(ctx)
 	go c.pushLoop(ctx)
 	go c.scanLoop(ctx)
+	if c.upd != nil {
+		go c.updateLoop(ctx)
+	}
 	c.mu.Lock()
 	if c.st.Open {
 		c.log.Print(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))

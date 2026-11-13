@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -461,4 +462,170 @@ func (u *updater) prepare(ctx context.Context) (string, error) {
 	u.mu.Unlock()
 	u.logf(T("Aggiornamento disponibile: %s (scaricato e verificato, si installa alla chiusura della cassaforte)"), v)
 	return v, nil
+}
+
+// ---- installazione ----
+
+var errUpdateRestart = errors.New("riavvio per aggiornamento")
+
+const updateExitCode = 75
+
+// copyFileSync copia src in dst (sovrascrivendolo) e lo scrive su disco.
+func copyFileSync(src, dst string, mode os.FileMode) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	return os.Chmod(dst, mode)
+}
+
+// cleanupOldExe rimuove i resti di un'installazione precedente.
+func cleanupOldExe(exe string) {
+	os.Remove(exe + ".old")
+	os.Remove(exe + ".new")
+}
+
+func (u *updater) discardStaged() {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.stagedPath != "" {
+		os.Remove(u.stagedPath)
+	}
+	u.st.Staged, u.stagedPath = "", ""
+}
+
+// installedVersion è la versione del programma su disco (può essere più nuova
+// di quella in esecuzione se è stato aggiornato a mano); "" se non si legge.
+func (u *updater) installedVersion() string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, u.exe, "version").Output()
+	if err != nil {
+		return ""
+	}
+	v, ok := strings.CutPrefix(strings.TrimSpace(string(out)), "Encluca ")
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+// install sostituisce il programma con la versione pronta. Va chiamata solo a
+// cassaforte chiusa (vedi Client.tryBeginUpdate).
+func (u *updater) install() (from, to string, err error) {
+	u.mu.Lock()
+	staged, path := u.st.Staged, u.stagedPath
+	u.mu.Unlock()
+	if staged == "" {
+		return "", "", errors.New(T("nessun aggiornamento pronto"))
+	}
+	inUse := u.current
+	if v := u.installedVersion(); newerVersion(v, inUse) {
+		inUse = v
+	}
+	if !newerVersion(staged, inUse) {
+		u.discardStaged()
+		return "", "", fmt.Errorf(T("l'aggiornamento pronto (%s) non è più nuovo della versione installata (%s): scartato"), staged, inUse)
+	}
+	if err := replaceExe(u.exe, path); err != nil {
+		return "", "", err
+	}
+	rec := map[string]any{"from": u.current, "to": staged, "at": time.Now()}
+	if err := saveJSON(filepath.Join(u.dataDir, "update-installed.json"), rec); err != nil {
+		u.logf("update-installed.json: %v", err)
+	}
+	u.discardStaged()
+	return u.current, staged, nil
+}
+
+// listenRetry ritenta l'ascolto: dopo un riavvio per aggiornamento la porta
+// può restare occupata per qualche istante dal processo precedente.
+func listenRetry(addr string, tries int, wait time.Duration) (net.Listener, error) {
+	var err error
+	for i := 0; i < tries; i++ {
+		var ln net.Listener
+		if ln, err = net.Listen("tcp", addr); err == nil {
+			return ln, nil
+		}
+		if i < tries-1 {
+			time.Sleep(wait)
+		}
+	}
+	return nil, err
+}
+
+// ---- integrazione nel client ----
+
+// tryBeginUpdate segna l'inizio di un'installazione, solo a cassaforte chiusa
+// (anche non "rimasta aperta") e senza operazioni in corso.
+func (c *Client) tryBeginUpdate() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.cip != nil || c.st.Open || c.busy != "" || c.updating {
+		return false
+	}
+	c.updating = true
+	return true
+}
+
+func (c *Client) tryInstallUpdate() {
+	staged := c.upd.state().Staged
+	if staged == "" || !c.tryBeginUpdate() {
+		return
+	}
+	c.log.Printf(T("Installo l'aggiornamento %s e riavvio il servizio"), staged)
+	if _, _, err := c.upd.install(); err != nil {
+		c.mu.Lock()
+		c.updating = false
+		c.mu.Unlock()
+		c.log.Printf(T("Installazione dell'aggiornamento non riuscita: %v"), err)
+		return
+	}
+	// updating resta vero: la cassaforte non si apre più fino al riavvio
+	select {
+	case c.restart <- struct{}{}:
+	default:
+	}
+}
+
+const (
+	updateCheckEvery   = 6 * time.Hour
+	updateInstallEvery = 30 * time.Second
+)
+
+func (c *Client) updateLoop(ctx context.Context) {
+	checkT := time.NewTimer(0)
+	defer checkT.Stop()
+	inst := time.NewTicker(updateInstallEvery)
+	defer inst.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-checkT.C:
+			if err := c.upd.check(ctx); err != nil && ctx.Err() == nil {
+				c.log.Printf(T("Controllo degli aggiornamenti non riuscito: %v"), err)
+			}
+			checkT.Reset(updateCheckEvery)
+			c.tryInstallUpdate()
+		case <-inst.C:
+			c.tryInstallUpdate()
+		}
+	}
 }

@@ -216,4 +216,12 @@ var enMessages = map[string]string{
 	"il pacchetto scaricato non corrisponde all'impronta firmata":                                        "the downloaded package does not match the signed checksum",
 	"il nuovo programma non risponde come la versione %s":                                                "the new program does not report itself as version %s",
 	"Aggiornamento disponibile: %s (scaricato e verificato, si installa alla chiusura della cassaforte)": "Update available: %s (downloaded and verified, it will be installed when the vault is closed)",
+	"nessun aggiornamento pronto":                                                                        "no update ready",
+	"l'aggiornamento pronto (%s) non è più nuovo della versione installata (%s): scartato":               "the ready update (%s) is not newer than the installed version (%s): discarded",
+	"Installo l'aggiornamento %s e riavvio il servizio":                                                  "Installing update %s and restarting the service",
+	"Installazione dell'aggiornamento non riuscita: %v":                                                  "Update installation failed: %v",
+	"Controllo degli aggiornamenti non riuscito: %v":                                                     "Update check failed: %v",
+	"aggiornamento in corso: riprova tra qualche secondo":                                                "update in progress: try again in a few seconds",
+	"Aggiornamento installato: %s → %s":                                                                  "Update installed: %s → %s",
+	"Aggiornamento automatico non disponibile: %v":                                                       "Automatic update unavailable: %v",
 }

@@ -121,6 +121,17 @@ func main() {
 		ui := fs.String("ui", envOr("ENCLUCA_UI", "127.0.0.1:8484"), "indirizzo dell'interfaccia (solo locale)")
 		fs.Parse(os.Args[2:])
 		if err := runClient(ctx, *data, *ui); err != nil {
+			if errors.Is(err, errUpdateRestart) {
+				// systemd/launchd riavviano per il codice ≠ 0; su Windows si rilancia da solo
+				exe, _ := os.Executable()
+				if c := updateExePath(); c != "" {
+					exe = c
+				}
+				if rerr := relaunchSelf(exe); rerr != nil {
+					fmt.Fprintln(os.Stderr, "ERRORE riavvio:", rerr)
+				}
+				os.Exit(updateExitCode)
+			}
 			fatal(err)
 		}
 	default:
@@ -159,10 +170,12 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	if err != nil {
 		return err
 	}
+	setupClientUpdater(c, dir)
 	c.run(ctx)
 	uiToken := randHex(32)
 	srv := &http.Server{Addr: uiAddr, Handler: securityHeaders(c.uiHandlerToken(uiAddr, uiToken)), ReadHeaderTimeout: 10 * time.Second}
-	ln, err := net.Listen("tcp", uiAddr)
+	// dopo un riavvio per aggiornamento la porta può essere ancora del processo precedente
+	ln, err := listenRetry(uiAddr, 20, 500*time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -174,10 +187,13 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	errc := make(chan error, 1)
 	go func() { errc <- srv.Serve(ln) }()
 	c.log.Printf(T("Encluca %s avviato: apri http://%s"), Version, uiAddr)
+	restart := false
 	select {
 	case err := <-errc:
 		return err
 	case <-ctx.Done():
+	case <-c.restart:
+		restart = true
 	}
 	// arresto ordinato (spegnimento del PC, stop del servizio): se aperta, chiude la cassaforte
 	c.mu.Lock()
@@ -192,8 +208,37 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	sctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	srv.Shutdown(sctx)
+	if restart {
+		return errUpdateRestart
+	}
 	return nil
 }
+
+// setupClientUpdater pulisce i resti di un aggiornamento, registra quello
+// appena installato e prepara l'aggiornamento automatico. Un errore qui non
+// ferma il client: l'aggiornamento resta solo spento.
+func setupClientUpdater(c *Client, dir string) {
+	rec := filepath.Join(dir, "update-installed.json")
+	var done struct{ From, To string }
+	if loadJSON(rec, &done) == nil {
+		c.log.Printf(T("Aggiornamento installato: %s → %s"), done.From, done.To)
+		os.Remove(rec)
+	}
+	u, err := newUpdater(dir, Version, c.log.Printf)
+	if err != nil {
+		c.log.Printf(T("Aggiornamento automatico non disponibile: %v"), err)
+		return
+	}
+	cleanupOldExe(u.exe)
+	c.upd = u
+	clientExe = u.exe
+}
+
+// clientExe è il percorso reale del programma (senza collegamenti): su Windows,
+// dopo la sostituzione, os.Executable punterebbe al vecchio file rinominato.
+var clientExe string
+
+func updateExePath() string { return clientExe }
 
 func (c *Client) uiHandler(uiAddr string) http.Handler { return c.uiHandlerToken(uiAddr, randHex(32)) }
 
