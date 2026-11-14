@@ -5,7 +5,7 @@
 #        e assegnala all'utente apps:  sudo chown 568:568 /mnt/tank/encluca/data
 # Sostituisci /mnt/tank con il percorso del tuo pool.
 #
-# Aggiornare: Apps -> encluca -> Restart (pull_policy: always scarica l'ultima versione).
+# Aggiornare: Apps -> encluca -> Stop, poi Start (pull_policy: always scarica l'ultima versione).
 services:
   encluca-hub:
     image: ghcr.io/vonausterliz/encluca:latest
