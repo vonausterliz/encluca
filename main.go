@@ -79,6 +79,9 @@ func main() {
 		attachParentConsole()
 	}
 	if len(os.Args) < 2 {
+		if openFromBundle() { // macOS: doppio clic su Encluca.app
+			return
+		}
 		usage()
 		os.Exit(2)
 	}

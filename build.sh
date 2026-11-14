@@ -25,7 +25,7 @@ build() { # os arch packaging-dir
   cp LEGGIMI.md README.md "$out/"
   case $os in # logo per i collegamenti
     linux) cp assets/logo.svg "$out/encluca.svg"; cp assets/encluca-256.png "$out/encluca.png" ;;
-    darwin) cp assets/encluca-512.png "$out/encluca.png" ;;
+    darwin) cp assets/encluca.icns "$out/encluca.icns" ;;
     windows) cp assets/encluca.ico "$out/encluca.ico" ;;
   esac
   [ "$os" = linux ] && cp docs/INSTALLA-TRUENAS.md "$out/"

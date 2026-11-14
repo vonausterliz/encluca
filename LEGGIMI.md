@@ -67,7 +67,7 @@ Quando aggiungi un dispositivo, indica nel campo "Indirizzo NAS visto dai PC" l'
 | Sistema | Comando, dalla cartella del pacchetto |
 |---|---|
 | Linux   | `./install.sh` (servizio utente systemd) |
-| macOS   | `./install.sh` (LaunchAgent; al primo avvio, se macOS lo blocca: Impostazioni → Privacy e sicurezza → Apri comunque) |
+| macOS   | `./install.sh`: installa **Encluca.app** in Applicazioni (si avvia al login). Quando macOS chiede l'accesso alla **rete locale**, rispondi *Consenti*; se non lo chiede e il NAS risulta irraggiungibile ("no route to host"): Impostazioni → Privacy e sicurezza → Rete locale → attiva Encluca |
 | Windows | tasto destro su `install.ps1` → *Esegui con PowerShell* (oppure `powershell -ExecutionPolicy Bypass -File install.ps1`) |
 
 Poi:

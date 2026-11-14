@@ -562,6 +562,7 @@ func (u *updater) install() (from, to string, err error) {
 	if err := replaceExe(u.exe, path); err != nil {
 		return "", "", err
 	}
+	afterReplace(u.exe, u.logf)
 	rec := map[string]any{"from": u.current, "to": staged, "at": time.Now()}
 	if err := saveJSON(filepath.Join(u.dataDir, "update-installed.json"), rec); err != nil {
 		u.logf("update-installed.json: %v", err)
