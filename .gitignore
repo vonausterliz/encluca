@@ -1,1 +1,16 @@
+# pacchetti generati da build.sh
 dist/
+
+# segreti: non devono MAI finire nel repository (è pubblico)
+*.key
+*.pem
+*.p12
+*.pfx
+.env
+.env.*
+signing.key
+config.json
+gdrive*.json
+client_secret*.json
+token*.json
+*.log

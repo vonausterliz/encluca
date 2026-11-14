@@ -1,4 +1,5 @@
-# Test e controllo delle vulnerabilità note (govulncheck) a ogni push e pull request.
+# Test, controllo delle vulnerabilità note (govulncheck) e ricerca di segreti (gitleaks)
+# a ogni push e pull request.
 # Le Actions sono fissate a uno SHA (il commento indica la versione).
 name: Test
 
@@ -26,3 +27,15 @@ jobs:
       - run: go test ./...
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  segreti:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: gitleaks (tutta la storia)
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git . --redact --no-banner

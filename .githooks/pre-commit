@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Blocca il commit se nei file preparati c'è un segreto (chiavi, token, password).
+# Attivazione (una volta per clone):  git config core.hooksPath .githooks
+set -euo pipefail
+GL="$(command -v gitleaks || true)"
+[ -z "$GL" ] && [ -x "$HOME/.local/bin/gitleaks" ] && GL="$HOME/.local/bin/gitleaks"
+if [ -z "$GL" ]; then
+  echo "pre-commit: gitleaks non trovato. Installa con:"
+  echo "  GOBIN=\$HOME/.local/bin go install github.com/zricethezav/gitleaks/v8@v8.30.1"
+  exit 1
+fi
+# nomi di file che non devono mai entrare, anche se forzati con git add -f
+bad="$(git diff --cached --name-only --diff-filter=ACR | grep -iE '(^|/)(signing\.key|.*\.pem|.*\.p12|.*\.pfx|\.env(\..*)?|client_secret.*\.json|token.*\.json)$' || true)"
+if [ -n "$bad" ]; then
+  echo "pre-commit: file sensibili nel commit, rimuovili con 'git restore --staged':"
+  echo "$bad"
+  exit 1
+fi
+exec "$GL" git --pre-commit --staged --redact --no-banner .

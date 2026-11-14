@@ -64,6 +64,14 @@ go test ./...   # test di cifratura (con rclone, se installato) e test end-to-en
 ./build.sh      # pacchetti per tutti i sistemi in dist/
 ```
 
+Il repository è pubblico: prima del primo commit attiva il controllo dei segreti, che blocca
+chiavi, token e password nei file preparati (lo stesso controllo gira anche su GitHub a ogni push):
+
+```bash
+GOBIN=$HOME/.local/bin go install github.com/zricethezav/gitleaks/v8@v8.30.1
+git config core.hooksPath .githooks
+```
+
 | File | Ruolo |
 |---|---|
 | `internal/rcrypt/` | cifratura nel formato rclone crypt (contenuti: XSalsa20-Poly1305; nomi: AES-EME; chiavi: scrypt) |
