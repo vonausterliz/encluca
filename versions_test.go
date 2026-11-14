@@ -195,3 +195,238 @@ func TestStatusReportsVersions(t *testing.T) {
 		t.Fatalf("stato: %+v", s.Versions)
 	}
 }
+
+// ---- ripristino ----
+
+func nowNano() int64 {
+	n := time.Now().UnixNano()
+	time.Sleep(2 * time.Millisecond)
+	return n
+}
+
+func restoreAt(env *testEnv, at int64, dry bool) (int, int) {
+	env.hub.mu.Lock()
+	defer env.hub.mu.Unlock()
+	return env.hub.restoreAtLocked(at, dry)
+}
+
+func TestRestoreSingleVersion(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "uno")
+	put(t, env, tok, encF, 1, "due")
+	env.hub.mu.Lock()
+	err := env.hub.restoreVersionLocked(0, time.Now().UnixNano())
+	env.hub.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if content(env, encF) != "uno" {
+		t.Fatalf("file corrente: %q", content(env, encF))
+	}
+	if e := env.entry(encF); e.Rev != 3 || e.Dev != "versions" || e.Del || e.Size != 3 {
+		t.Fatalf("voce: %+v", e)
+	}
+	// la versione ripristinata resta nella storia, e quella sostituita si aggiunge
+	got := map[string]bool{}
+	for _, v := range versions(env) {
+		got[versionContent(env, v)] = true
+	}
+	if len(got) != 2 || !got["uno"] || !got["due"] {
+		t.Fatalf("versioni dopo il ripristino: %v", got)
+	}
+}
+
+func TestRestoreAt(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "a1")
+	put(t, env, tok, encY, 0, "b1")
+	x := nowNano()
+	put(t, env, tok, encF, 1, "a2")
+	put(t, env, tok, encF, 2, "a3")
+	if c, u := restoreAt(env, x, true); c != 1 || u != 0 {
+		t.Fatalf("prova: %d %d", c, u)
+	}
+	if content(env, encF) != "a3" {
+		t.Fatal("la prova ha modificato il file")
+	}
+	if c, u := restoreAt(env, x, false); c != 1 || u != 0 {
+		t.Fatalf("ripristino: %d %d", c, u)
+	}
+	if content(env, encF) != "a1" || content(env, encY) != "b1" {
+		t.Fatalf("contenuti: %q %q", content(env, encF), content(env, encY))
+	}
+	if e := env.entry(encY); e.Rev != 1 {
+		t.Fatalf("il file non modificato è stato toccato: %+v", e)
+	}
+}
+
+func TestRestoreAtIsReversible(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "a1")
+	x := nowNano()
+	put(t, env, tok, encF, 1, "a2")
+	put(t, env, tok, encF, 2, "a3")
+	y := nowNano()
+	restoreAt(env, x, false)
+	if content(env, encF) != "a1" {
+		t.Fatalf("dopo il primo ripristino: %q", content(env, encF))
+	}
+	time.Sleep(2 * time.Millisecond)
+	if c, _ := restoreAt(env, y, false); c != 1 || content(env, encF) != "a3" {
+		t.Fatalf("annullamento: cambiati %d, contenuto %q", c, content(env, encF))
+	}
+	// e si può tornare di nuovo alla stessa data: la storia non si consuma
+	time.Sleep(2 * time.Millisecond)
+	if c, _ := restoreAt(env, x, false); c != 1 || content(env, encF) != "a1" {
+		t.Fatalf("secondo ritorno a X: cambiati %d, contenuto %q", c, content(env, encF))
+	}
+}
+
+func TestRestoreAtModifiedThenDeleted(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "a1")
+	x := nowNano()
+	put(t, env, tok, encF, 1, "a2")
+	del(t, env, tok, encF, 2)
+	_, u := restoreAt(env, x, false)
+	if u != 1 || content(env, encF) != "a1" {
+		t.Fatalf("recuperati %d, contenuto %q", u, content(env, encF))
+	}
+	if e := env.entry(encF); e.Del {
+		t.Fatal("la voce è ancora cancellata")
+	}
+}
+
+func TestRestoreAtDeletedOnly(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "a1")
+	x := nowNano()
+	del(t, env, tok, encF, 1)
+	if _, u := restoreAt(env, x, false); u != 1 || content(env, encF) != "a1" {
+		t.Fatalf("recuperati %d, contenuto %q", u, content(env, encF))
+	}
+}
+
+func TestRestoreAtIgnoresUndatedEntries(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "vecchio")
+	env.hub.mu.Lock()
+	env.hub.idx.Entries[encF].At = 0 // come una voce caricata prima della 0.2.5
+	env.hub.mu.Unlock()
+	if c, u := restoreAt(env, time.Now().Add(-time.Hour).UnixNano(), false); c != 0 || u != 0 {
+		t.Fatalf("toccata una voce senza data: %d %d", c, u)
+	}
+	if content(env, encF) != "vecchio" || env.entry(encF).Rev != 1 {
+		t.Fatal("voce senza data modificata")
+	}
+}
+
+func TestRestoreAtKeepsFilesCreatedLater(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	x := nowNano()
+	put(t, env, tok, encF, 0, "nuovo")
+	put(t, env, tok, encF, 1, "nuovo 2")
+	if c, u := restoreAt(env, x, false); c != 0 || u != 0 || content(env, encF) != "nuovo 2" {
+		t.Fatalf("file creato dopo: %d %d %q", c, u, content(env, encF))
+	}
+}
+
+func TestVersionsAdminAPI(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "a1")
+	x := time.Now()
+	time.Sleep(5 * time.Millisecond)
+	put(t, env, tok, encF, 1, "a2")
+	admin := adminClient(t, env)
+	base := env.srv.URL + "/admin/api/"
+
+	if code, body := postJSON(t, admin, base+"versions/config", map[string]int{"Keep": 3, "MaxAgeDays": 30}); code != 200 {
+		t.Fatalf("config: %d %s", code, body)
+	}
+	env.hub.mu.Lock()
+	cfg := env.hub.versionsCfgLocked()
+	env.hub.mu.Unlock()
+	if cfg.Keep != 3 || cfg.MaxAgeDays != 30 {
+		t.Fatalf("config salvata: %+v", cfg)
+	}
+	if code, _ := postJSON(t, admin, base+"versions/config", map[string]int{"Keep": 500, "MaxAgeDays": 30}); code != 400 {
+		t.Fatalf("Keep fuori limite: %d", code)
+	}
+	if code, _ := postJSON(t, admin, base+"versions/config", map[string]int{"Keep": 2, "MaxAgeDays": -1}); code != 400 {
+		t.Fatalf("MaxAgeDays negativo: %d", code)
+	}
+
+	at := x.Format(time.RFC3339Nano)
+	code, body := postJSON(t, admin, base+"versions/restore-at", map[string]any{"At": at, "DryRun": true})
+	if code != 200 || !strings.Contains(string(body), `"changed":1`) || content(env, encF) != "a2" {
+		t.Fatalf("prova: %d %s", code, body)
+	}
+	if code, _ := postJSON(t, admin, base+"versions/restore-at", map[string]any{"At": time.Now().Add(time.Hour).Format(time.RFC3339)}); code != 400 {
+		t.Fatalf("data futura: %d", code)
+	}
+	if code, _ := postJSON(t, admin, base+"versions/restore-at", map[string]any{"At": "ieri"}); code != 400 {
+		t.Fatalf("data non valida: %d", code)
+	}
+
+	// le versioni del singolo file richiedono l'esplorazione attiva
+	if code, _ := get(t, admin, base+"vault/versions?p="+encF); code != 403 {
+		t.Fatalf("elenco con esplorazione spenta: %d", code)
+	}
+	env.hub.mu.Lock()
+	env.hub.cfg.BrowseEnabled = true
+	env.hub.mu.Unlock()
+	code, body = get(t, admin, base+"vault/versions?p="+encF)
+	var list []struct {
+		ID       string `json:"id"`
+		Replaced int64  `json:"replaced"`
+	}
+	json.Unmarshal(body, &list)
+	if code != 200 || len(list) != 1 || list[0].ID == "" || list[0].Replaced == 0 {
+		t.Fatalf("elenco: %d %s", code, body)
+	}
+	if code, _ := postJSON(t, admin, base+"vault/versions/restore", map[string]string{"P": encF, "ID": "inesistente"}); code != 404 {
+		t.Fatalf("versione inesistente: %d", code)
+	}
+	if code, body := postJSON(t, admin, base+"vault/versions/restore", map[string]string{"P": encF, "ID": list[0].ID}); code != 200 || content(env, encF) != "a1" {
+		t.Fatalf("ripristino singolo: %d %s contenuto %q", code, body, content(env, encF))
+	}
+	// e il ripristino a una data dall'API
+	time.Sleep(5 * time.Millisecond)
+	put(t, env, tok, encF, 3, "a4")
+	if code, body := postJSON(t, admin, base+"versions/restore-at", map[string]any{"At": at}); code != 200 || content(env, encF) != "a1" {
+		t.Fatalf("restore-at: %d %s contenuto %q", code, body, content(env, encF))
+	}
+}
+
+// Il ripristino crea una nuova revisione: i PC la ricevono come una modifica qualunque.
+func TestRestoreAtReachesClients(t *testing.T) {
+	env, a, b := twoOpen(t)
+	writeWork(t, a, "doc.txt", "versione buona")
+	waitFor(t, "prima versione su B", func() bool { return readWork(b, "doc.txt") == "versione buona" })
+	x := nowNano()
+	writeWork(t, a, "doc.txt", "rovinato da un virus")
+	waitFor(t, "seconda versione su B", func() bool { return readWork(b, "doc.txt") == "rovinato da un virus" })
+	waitFor(t, "niente in coda", func() bool { return pendingCount(a) == 0 && pendingCount(b) == 0 })
+	if c, _ := restoreAt(env, x, false); c != 1 {
+		t.Fatalf("file riportati: %d", c)
+	}
+	waitFor(t, "ripristino su A e B", func() bool {
+		return readWork(a, "doc.txt") == "versione buona" && readWork(b, "doc.txt") == "versione buona"
+	})
+	waitFor(t, "niente in coda", func() bool { return pendingCount(a) == 0 && pendingCount(b) == 0 })
+	for _, c := range []*Client{a, b} {
+		for _, f := range listWork(c) {
+			if strings.Contains(f, "conflitto") {
+				t.Fatalf("copia di conflitto: %s", f)
+			}
+		}
+	}
+}

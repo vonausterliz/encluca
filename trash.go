@@ -105,24 +105,35 @@ func (h *Hub) trashStatsLocked() map[string]any {
 // restoreTrashLocked rimette nella cassaforte i file del cestino cancellati dopo since
 // (0 = tutti) e ancora assenti: per ogni percorso vale la versione cancellata più di recente.
 // I dispositivi li ricevono come normali modifiche. Restituisce quanti file sono tornati.
-func (h *Hub) restoreTrashLocked(since int64) int {
+// trashCandidatesLocked elenca gli elementi del cestino che un ripristino da since riporterebbe
+// nella cassaforte: per ogni percorso il più recente, se eliminato dopo since e ancora assente.
+func (h *Hub) trashCandidatesLocked(since int64) []int {
 	idx := make([]int, 0, len(h.trash))
 	for i := range h.trash {
 		idx = append(idx, i)
 	}
 	sort.SliceStable(idx, func(a, b int) bool { return h.trash[idx[a]].Deleted > h.trash[idx[b]].Deleted })
 	done := map[string]bool{}
-	var restored []int
+	var out []int
 	for _, i := range idx {
 		it := h.trash[i]
 		if it.Deleted < since || done[it.Path] {
 			continue
 		}
 		done[it.Path] = true
-		cur := h.idx.Entries[it.Path]
-		if cur != nil && !cur.Del {
+		if cur := h.idx.Entries[it.Path]; cur != nil && !cur.Del {
 			continue // nel frattempo il file è stato ricreato: la versione attuale prevale
 		}
+		out = append(out, i)
+	}
+	return out
+}
+
+func (h *Hub) restoreTrashLocked(since int64) int {
+	var restored []int
+	for _, i := range h.trashCandidatesLocked(since) {
+		it := h.trash[i]
+		cur := h.idx.Entries[it.Path]
 		full := filepath.Join(h.vaultDir(), filepath.FromSlash(it.Path))
 		if it.Dir {
 			if os.MkdirAll(full, 0o700) != nil {
