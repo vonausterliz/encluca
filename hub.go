@@ -43,6 +43,9 @@ type Entry struct {
 	Dev   string `json:"dev,omitempty"`
 	// Dir: cartella vuota (nessun contenuto). Una cartella ha una voce solo se non contiene nulla.
 	Dir bool `json:"dir,omitempty"`
+	// At: quando questa revisione è diventata corrente (unix nano, orologio dell'hub); 0 = non noto
+	// (voce creata da una versione dell'hub precedente alla 0.2.5).
+	At int64 `json:"at,omitempty"`
 }
 
 type hubIndex struct {
@@ -78,6 +81,8 @@ type hubConfig struct {
 	Lang      string       `json:"lang,omitempty"` // "it" | "en"
 	// BrowseEnabled consente di sfogliare la cassaforte dalla pagina del NAS (decifratura nel browser)
 	BrowseEnabled bool `json:"browseEnabled,omitempty"`
+	// Versions: quante versioni precedenti conservare (nil = predefiniti, vedi versions.go)
+	Versions *VersionsConfig `json:"versions,omitempty"`
 }
 
 type Hub struct {
@@ -95,6 +100,7 @@ type Hub struct {
 	limiter     *ipLimiter
 	scryptSem   chan struct{}
 	trash       []trashItem
+	versions    []versionItem
 	latest      string // ultima versione pubblicata (solo per l'avviso: l'hub non si aggiorna da solo)
 	latestFail  bool   // errore del controllo già registrato
 }
@@ -151,6 +157,7 @@ func newHub(dir, listen string) (*Hub, error) {
 		return nil, err
 	}
 	h.loadTrash()
+	h.loadVersions()
 	h.gd = newGDrive(h)
 	return h, h.saveCfg()
 }
@@ -520,6 +527,13 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		if cur != nil && cur.Dir {
 			os.Remove(full) // la cartella vuota con questo nome diventa un file
 		}
+		now := time.Now().UnixNano()
+		if cur != nil && !cur.Del && !cur.Dir && cur.SHA != sum {
+			// la versione che sta per essere sostituita resta disponibile (vedi versions.go)
+			if err := h.keepVersionLocked(full, cur, now, false); err != nil {
+				h.log.Printf(T("ERRORE conservazione della versione precedente: %v"), err)
+			}
+		}
 		if err := os.Rename(tmpName, full); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -529,7 +543,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 			os.Chtimes(full, t, t)
 		}
 		h.idx.Seq++
-		e := &Entry{Path: p, Rev: curRev + 1, Size: size, SHA: sum, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID}
+		e := &Entry{Path: p, Rev: curRev + 1, Size: size, SHA: sum, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID, At: now}
 		h.idx.Entries[p] = e
 		if err := h.saveIndex(); err != nil {
 			h.log.Printf(T("ERRORE salvataggio indice: %v"), err)
@@ -578,6 +592,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		cur.Size, cur.SHA = 0, ""
 		cur.Seq = h.idx.Seq
 		cur.Dev = d.ID
+		cur.At = time.Now().UnixNano()
 		h.saveIndex()
 		h.broadcast()
 		c := *cur
@@ -616,7 +631,7 @@ func (h *Hub) putDir(w http.ResponseWriter, p, full string, base, mtime int64, d
 		return
 	}
 	h.idx.Seq++
-	e := &Entry{Path: p, Rev: curRev + 1, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID, Dir: true}
+	e := &Entry{Path: p, Rev: curRev + 1, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID, Dir: true, At: time.Now().UnixNano()}
 	h.idx.Entries[p] = e
 	if err := h.saveIndex(); err != nil {
 		h.log.Printf(T("ERRORE salvataggio indice: %v"), err)
@@ -727,6 +742,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	seq := h.idx.Seq
 	browse := h.cfg.BrowseEnabled
 	trash := h.trashStatsLocked()
+	vers := h.versionsStatsLocked()
 	latest := h.latest
 	h.mu.Unlock()
 	_, metaErr := os.Stat(h.metaPath())
@@ -735,7 +751,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 		"version": Version, "files": files, "bytes": size, "seq": seq,
 		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint, "browseEnabled": browse,
 		"defaultPassword": pwFileErr == nil, "lang": getLang(),
-		"gdrive": h.gd.status(), "trash": trash, "log": h.log.Lines(),
+		"gdrive": h.gd.status(), "trash": trash, "versions": vers, "log": h.log.Lines(),
 	}
 	if newerVersion(latest, Version) {
 		res["latestVersion"] = latest

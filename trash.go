@@ -140,7 +140,7 @@ func (h *Hub) restoreTrashLocked(since int64) int {
 			rev = cur.Rev
 		}
 		h.idx.Seq++
-		h.idx.Entries[it.Path] = &Entry{Path: it.Path, Rev: rev + 1, Size: it.Size, SHA: it.SHA, MTime: it.MTime, Seq: h.idx.Seq, Dev: "trash", Dir: it.Dir}
+		h.idx.Entries[it.Path] = &Entry{Path: it.Path, Rev: rev + 1, Size: it.Size, SHA: it.SHA, MTime: it.MTime, Seq: h.idx.Seq, Dev: "trash", Dir: it.Dir, At: time.Now().UnixNano()}
 		restored = append(restored, i)
 	}
 	if len(restored) == 0 {
