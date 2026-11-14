@@ -516,6 +516,9 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if cur != nil && cur.Dir {
+			os.Remove(full) // la cartella vuota con questo nome diventa un file
+		}
 		if err := os.Rename(tmpName, full); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return

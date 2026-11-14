@@ -408,6 +408,10 @@ func (cw *countWriter) Write(p []byte) (int, error) {
 // scanFileLocked controlla un file della cartella aperta; se è cambiato lo cifra e lo mette in coda.
 func (c *Client) scanFileLocked(enc, rel string, info fs.FileInfo) (bool, error) {
 	st := c.st.Files[enc]
+	if st != nil && st.Dir {
+		// al posto della cartella vuota ora c'è un file con lo stesso nome
+		st.Dir, st.Plain = false, nil
+	}
 	mt, sz := info.ModTime().UnixNano(), info.Size()
 	if st != nil && !st.Del && st.Plain != nil && st.Plain.Size == sz && st.Plain.MTime == mt {
 		return false, nil
@@ -455,6 +459,12 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 	seen := map[string]bool{}
 	var dirs []string             // cartelle incontrate (percorsi assoluti)
 	hasChild := map[string]bool{} // cartelle con almeno un elemento non ignorato
+	hasLocal := map[string]bool{} // cartelle con dentro una modifica fatta su questo PC
+	markLocal := func(p string) {
+		for d := filepath.Dir(p); d != work && strings.HasPrefix(d, work); d = filepath.Dir(d) {
+			hasLocal[d] = true
+		}
+	}
 	// la scansione percorre tutta la cartella: l'elenco dei problemi si ricostruisce da zero,
 	// così sparisce la segnalazione di un file rinominato o spostato
 	c.problems = map[string]string{}
@@ -513,6 +523,9 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 			return nil
 		}
 		changed = changed || ch
+		if st := c.st.Files[enc]; st != nil && st.Pending == "put" {
+			markLocal(p)
+		}
 		return nil
 	})
 	if walkErr != nil && firstErr == nil {
@@ -555,8 +568,23 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 			os.Remove(c.mirrorPath(enc))
 		}
 		c.st.Files[enc] = ns
+		markLocal(p)
 		c.log.Printf(T("Nuova cartella: %s"), rel)
 		changed = true
+	}
+	// una voce cartella con contenuto si cancella solo se il contenuto è stato aggiunto qui:
+	// se è contenuto già sincronizzato, sta per arrivare dal NAS la sua cancellazione
+	// (A ha svuotato la cartella e la tiene), quindi la voce resta
+	for _, p := range dirs {
+		if !hasChild[p] || hasLocal[p] {
+			continue
+		}
+		rel, _ := filepath.Rel(work, p)
+		if enc, err := c.encPathLocked(filepath.ToSlash(rel)); err == nil {
+			if st := c.st.Files[enc]; st != nil && st.Dir && !st.Del && st.Pending == "" {
+				seen[enc] = true
+			}
+		}
 	}
 
 	// file spariti dalla cartella = cancellati dall'utente
@@ -637,6 +665,9 @@ func (c *Client) decryptToWorkLocked(enc string, st *fstate) error {
 		t := time.Unix(0, st.MTime)
 		os.Chtimes(tmp.Name(), t, t)
 	}
+	if fi, err := os.Stat(dst); err == nil && fi.IsDir() {
+		removeIfOnlyJunk(dst) // una cartella vuota con lo stesso nome lascia il posto al file
+	}
 	if err := os.Rename(tmp.Name(), dst); err != nil {
 		os.Remove(tmp.Name())
 		return err
@@ -651,6 +682,86 @@ func (c *Client) decryptToWorkLocked(enc string, st *fstate) error {
 }
 
 // ---------- applicazione delle modifiche remote ----------
+
+// applyDirLocked applica una voce cartella (cartella vuota) ricevuta dal NAS.
+func (c *Client) applyDirLocked(e *Entry, st *fstate) {
+	if st != nil && st.Pending == "put" {
+		if st.Dir && !e.Del {
+			st.Rev, st.Pending, st.Conflict = e.Rev, "", 0 // creata anche qui: nessun conflitto
+		} else {
+			st.Rev = e.Rev // la modifica locale prevale e viene inviata sopra questa revisione
+		}
+		c.saveState()
+		return
+	}
+	open := c.st.Open && c.cip != nil
+	var full, rel string
+	if open {
+		if r, err := c.cip.DecryptPath(e.Path); err == nil {
+			rel, full = r, filepath.Join(c.cfg.WorkDir, filepath.FromSlash(r))
+		}
+	}
+	if e.Del {
+		if st != nil && !st.Del {
+			c.recentDels = append(c.recentDels, time.Now())
+		}
+		c.st.Files[e.Path] = &fstate{Rev: e.Rev, Dir: true, Del: true}
+		if full != "" {
+			if removeIfOnlyJunk(full) {
+				c.log.Printf(T("Cartella eliminata da un altro dispositivo: %s"), rel)
+			}
+			c.removeEmptyDirsUpLocked(filepath.Dir(full))
+		}
+		return
+	}
+	ns := &fstate{Rev: e.Rev, MTime: e.MTime, Dir: true}
+	c.st.Files[e.Path] = ns
+	os.Remove(c.mirrorPath(e.Path)) // se prima era un file
+	if full != "" {
+		if fi, err := os.Lstat(full); err == nil && !fi.IsDir() {
+			os.Remove(full) // il file con questo nome è stato sostituito altrove da una cartella
+		}
+		if os.MkdirAll(full, 0o700) == nil {
+			ns.Plain = &plainSnap{}
+			c.log.Printf(T("Nuova cartella da un altro dispositivo: %s"), rel)
+		}
+	}
+}
+
+// removeEmptyDirsUpLocked risale da dir fino alla cartella aperta (esclusa) togliendo le
+// cartelle rimaste vuote o con solo file ignorati (.DS_Store, Thumbs.db, …). Si ferma a una
+// cartella che è una voce cartella viva o che contiene altro.
+func (c *Client) removeEmptyDirsUpLocked(dir string) {
+	work := filepath.Clean(c.cfg.WorkDir)
+	for d := filepath.Clean(dir); d != work && strings.HasPrefix(d, work+string(os.PathSeparator)); d = filepath.Dir(d) {
+		rel, _ := filepath.Rel(work, d)
+		if enc, err := c.encPathLocked(filepath.ToSlash(rel)); err == nil {
+			if st := c.st.Files[enc]; st != nil && st.Dir && !st.Del {
+				return
+			}
+		}
+		if !removeIfOnlyJunk(d) {
+			return
+		}
+	}
+}
+
+// removeIfOnlyJunk rimuove la cartella d se è vuota o contiene solo file ignorati.
+func removeIfOnlyJunk(d string) bool {
+	ents, err := os.ReadDir(d)
+	if err != nil {
+		return false
+	}
+	for _, e := range ents {
+		if e.IsDir() || !ignored(e.Name()) {
+			return false
+		}
+	}
+	for _, e := range ents {
+		os.Remove(filepath.Join(d, e.Name()))
+	}
+	return os.Remove(d) == nil
+}
 
 func conflictName(rel, device string) string {
 	dir, base := path.Split(rel)
@@ -735,6 +846,11 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 		c.mu.Unlock()
 		return nil
 	}
+	if e.Dir {
+		c.applyDirLocked(e, st)
+		c.mu.Unlock()
+		return nil
+	}
 	if st != nil && st.Pending == "put" && !e.Del && e.SHA == st.SHA {
 		// è il nostro stesso invio, visto dal pull prima che il push ne elaborasse la risposta
 		st.Rev, st.Pending, st.Conflict = e.Rev, "", 0
@@ -774,9 +890,14 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 			c.recentDels = append(c.recentDels, time.Now())
 		}
 		os.Remove(c.mirrorPath(e.Path))
+		c.st.Files[e.Path] = &fstate{Rev: e.Rev, Del: true}
 		if c.st.Open && c.cip != nil {
 			if rel, err := c.cip.DecryptPath(e.Path); err == nil {
-				os.Remove(filepath.Join(c.cfg.WorkDir, filepath.FromSlash(rel)))
+				full := filepath.Join(c.cfg.WorkDir, filepath.FromSlash(rel))
+				os.Remove(full)
+				// le cartelle rimaste vuote vanno tolte, altrimenti la scansione le
+				// rimanderebbe al NAS come cartelle vuote nuove
+				c.removeEmptyDirsUpLocked(filepath.Dir(full))
 				c.log.Printf(T("Eliminato da un altro dispositivo: %s"), rel)
 			}
 		}
