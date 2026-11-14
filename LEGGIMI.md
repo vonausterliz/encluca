@@ -107,6 +107,16 @@ L'API di Google Drive è gratuita e non richiede la fatturazione. L'unico limite
 - **Dalla 0.2.2 il NAS accetta solo computer con encluca 0.2.2 o successivo.** I computer con la 0.2.x si aggiornano da soli; quelli con la 0.1.x vanno reinstallati a mano. Nella pagina *Dispositivi* del NAS ogni computer mostra la sua versione, e quelli da aggiornare hanno l'etichetta "Da aggiornare".
 - **NAS:** l'hub non si aggiorna da solo. Quando c'è una versione nuova, la sua pagina lo segnala. Per aggiornare: TrueNAS → Apps → encluca → **Stop**, poi **Start**.
 
+## Versioni precedenti e ripristino
+
+Quando modifichi un file, il NAS conserva (cifrata) la versione precedente: **5 versioni per file, per 90 giorni**. Puoi cambiare questi valori nella pagina del NAS, in *Impostazioni* (0 versioni = non conservare).
+
+Se un virus o un errore rovina molti file, nella pagina del NAS apri **Ripristino → Riporta tutto com'era**, scegli data e ora, premi **Controlla** per vedere quanti file cambierebbero e poi **Riporta com'era**. I file modificati tornano alla versione di allora, quelli eliminati ricompaiono, quelli creati dopo restano. I computer ricevono tutto come normali modifiche, e l'operazione si può annullare ripetendola con un'ora di poco precedente.
+
+Per un singolo file: in *File della cassaforte* (se hai attivato l'esplorazione) premi **Versioni** accanto al file e poi **Ripristina**.
+
+Le versioni stanno solo sul NAS, non nel backup su Drive, e occupano spazio sul NAS: lo vedi in *Impostazioni*.
+
 ## ⚠️ La password
 
 **Non è recuperabile.** Se la perdi, i dati sono illeggibili per sempre, sia sul NAS sia su Google Drive. Conservala in un password manager e, se vuoi, su carta in un posto sicuro.

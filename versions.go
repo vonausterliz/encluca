@@ -221,6 +221,55 @@ func (h *Hub) restoreVersionLocked(i int, now int64) error {
 	return nil
 }
 
+// trashAtLocked cerca nel cestino il contenuto che il file path aveva all'istante at: tra gli
+// elementi eliminati dopo at, il primo a essere stato eliminato, purché esistesse già allora.
+func (h *Hub) trashAtLocked(path string, at int64) int {
+	best := -1
+	for i, it := range h.trash {
+		if it.Path == path && !it.Dir && it.Deleted > at && (best < 0 || it.Deleted < h.trash[best].Deleted) {
+			best = i
+		}
+	}
+	if best >= 0 && h.trash[best].Since > at {
+		return -1
+	}
+	return best
+}
+
+// restoreTrashOverLocked rimette al posto del file attuale l'elemento del cestino h.trash[ti].
+// Il contenuto attuale diventa una versione, così l'operazione si può annullare.
+func (h *Hub) restoreTrashOverLocked(ti int, now int64) error {
+	it := h.trash[ti]
+	full := filepath.Join(h.vaultDir(), filepath.FromSlash(it.Path))
+	cur := h.idx.Entries[it.Path]
+	var rev int64
+	if cur != nil {
+		rev = cur.Rev
+		if !cur.Del && !cur.Dir && cur.SHA != it.SHA {
+			if err := h.addVersionLocked(full, cur, now); err != nil {
+				return err
+			}
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o700); err != nil {
+		return err
+	}
+	if err := os.Rename(filepath.Join(h.trashDir(), it.File), full); err != nil {
+		return err
+	}
+	if it.MTime > 0 {
+		t := time.Unix(0, it.MTime)
+		os.Chtimes(full, t, t)
+	}
+	h.idx.Seq++
+	h.idx.Entries[it.Path] = &Entry{Path: it.Path, Rev: rev + 1, Size: it.Size, SHA: it.SHA, MTime: it.MTime, Seq: h.idx.Seq, Dev: "versions", At: now}
+	h.trash = append(h.trash[:ti:ti], h.trash[ti+1:]...)
+	h.saveTrashLocked()
+	h.pruneVersionsLocked()
+	h.saveVersionsLocked()
+	return nil
+}
+
 // restoreAtLocked riporta la cassaforte a com'era all'istante at: i file eliminati dopo at
 // tornano dal cestino, e ogni file modificato dopo at torna alla versione che aveva allora.
 // I file creati dopo at restano dove sono. Con dry=true conta soltanto, senza cambiare nulla.
@@ -241,14 +290,25 @@ func (h *Hub) restoreAtLocked(at int64, dry bool) (changed, undeleted int) {
 	now := time.Now().UnixNano()
 	for _, p := range paths {
 		i := h.versionAtLocked(p, at)
+		ti := -1
 		if i < 0 {
-			continue
+			// nessuna versione di allora: forse il file è stato eliminato e poi ricreato con lo
+			// stesso nome, e il contenuto di allora è nel cestino
+			if ti = h.trashAtLocked(p, at); ti < 0 {
+				continue
+			}
 		}
 		if dry {
 			changed++
 			continue
 		}
-		if err := h.restoreVersionLocked(i, now); err != nil {
+		var err error
+		if i >= 0 {
+			err = h.restoreVersionLocked(i, now)
+		} else {
+			err = h.restoreTrashOverLocked(ti, now)
+		}
+		if err != nil {
 			h.log.Printf(T("ERRORE ripristino di una versione: %v"), err)
 			continue
 		}

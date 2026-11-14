@@ -24,7 +24,8 @@ type trashItem struct {
 	MTime   int64  `json:"mtime"`
 	Deleted int64  `json:"deleted"` // unix nano
 	Dev     string `json:"dev,omitempty"`
-	Dir     bool   `json:"dir,omitempty"` // cartella vuota: nessun file in trash/
+	Dir     bool   `json:"dir,omitempty"`   // cartella vuota: nessun file in trash/
+	Since   int64  `json:"since,omitempty"` // da quando quel contenuto era corrente (0 = non noto)
 }
 
 func (h *Hub) trashDir() string       { return filepath.Join(h.dir, "trash") }
@@ -52,7 +53,7 @@ func (h *Hub) trashFileLocked(full string, e *Entry, dev string) error {
 	if err := os.Rename(full, filepath.Join(h.trashDir(), name)); err != nil {
 		return err
 	}
-	h.trash = append(h.trash, trashItem{Path: e.Path, File: name, Size: e.Size, SHA: e.SHA, MTime: e.MTime, Deleted: time.Now().UnixNano(), Dev: dev})
+	h.trash = append(h.trash, trashItem{Path: e.Path, File: name, Size: e.Size, SHA: e.SHA, MTime: e.MTime, Deleted: time.Now().UnixNano(), Dev: dev, Since: e.At})
 	h.purgeTrashLocked()
 	h.saveTrashLocked()
 	return nil

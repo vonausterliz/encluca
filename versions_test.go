@@ -430,3 +430,49 @@ func TestRestoreAtReachesClients(t *testing.T) {
 		}
 	}
 }
+
+// Un file eliminato e poi ricreato con lo stesso nome (come fanno alcuni ransomware): il
+// contenuto di prima è nel cestino, e "riporta com'era" deve ritrovarlo anche se il file c'è.
+func TestRestoreAtDeletedThenRecreated(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	put(t, env, tok, encF, 0, "originale")
+	x := nowNano()
+	del(t, env, tok, encF, 1)
+	put(t, env, tok, encF, 2, "cifrato dal virus")
+	if c, _ := restoreAt(env, x, true); c != 1 {
+		t.Fatalf("prova: cambiati %d", c)
+	}
+	if c, _ := restoreAt(env, x, false); c != 1 || content(env, encF) != "originale" {
+		t.Fatalf("cambiati %d, contenuto %q", c, content(env, encF))
+	}
+	// il contenuto sostituito resta tra le versioni: il ripristino è annullabile
+	found := false
+	for _, v := range versions(env) {
+		if versionContent(env, v) == "cifrato dal virus" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("il contenuto sostituito non è stato conservato")
+	}
+	env.hub.mu.Lock()
+	n := len(env.hub.trash)
+	env.hub.mu.Unlock()
+	if n != 0 {
+		t.Fatalf("elemento rimasto nel cestino: %d", n)
+	}
+}
+
+// Un file nato dopo la data scelta, poi eliminato e ricreato, non esisteva a quella data: resta com'è.
+func TestRestoreAtIgnoresTrashOfLaterFiles(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("A")
+	x := nowNano()
+	put(t, env, tok, encF, 0, "nato dopo")
+	del(t, env, tok, encF, 1)
+	put(t, env, tok, encF, 2, "ricreato")
+	if c, _ := restoreAt(env, x, false); c != 0 || content(env, encF) != "ricreato" {
+		t.Fatalf("cambiati %d, contenuto %q", c, content(env, encF))
+	}
+}
