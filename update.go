@@ -204,7 +204,7 @@ func extractBinary(archivePath, version, goos, goarch, outPath string) (err erro
 
 // ---- controllo e preparazione ----
 
-const defaultUpdateAPI = "https://api.github.com/repos/vonausterliz/encluca/releases/latest"
+const defaultUpdateAPI = "https://api.github.com/repos/vonausterliz/encluca-releases/releases/latest"
 
 type updateState struct {
 	Enabled   bool      `json:"enabled"`

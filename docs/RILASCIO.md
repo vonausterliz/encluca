@@ -20,10 +20,18 @@ Se la chiave venisse rubata, chi l'ha potrebbe firmare aggiornamenti falsi: in q
 1. Aggiorna `Version` in `main.go` e fai il commit.
 2. `export GOTOOLCHAIN=go1.27.4 && ./build.sh`. Lo script si ferma se manca la chiave e produce in `dist/` i 5 pacchetti, `SHA256SUMS` e `SHA256SUMS.sig`.
 3. Controllo: `(cd dist && sha256sum -c SHA256SUMS)` deve dare `OK` per tutti e 5.
-4. Tag e push: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-5. Release:
+4. Tag e push del codice: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+5. Release nel repository **pubblico dei rilasci** `vonausterliz/encluca-releases` (dalla 0.2.1 i client
+   cercano gli aggiornamenti lì, non nel repository del codice):
    ```
-   gh release create vX.Y.Z dist/*.tar.gz dist/*.zip dist/SHA256SUMS dist/SHA256SUMS.sig --title "vX.Y.Z" --notes "…"
+   gh release create vX.Y.Z dist/*.tar.gz dist/*.zip dist/SHA256SUMS dist/SHA256SUMS.sig \
+     --repo vonausterliz/encluca-releases --target main --title "vX.Y.Z" --notes "…"
    ```
    **Senza `SHA256SUMS` e `SHA256SUMS.sig` i client non si aggiornano.** Non è un problema, ma l'aggiornamento automatico non parte.
+
+   Solo per la **0.2.1** (versione di passaggio): pubblicala anche nel repository del codice
+   (stesso comando con `--repo vonausterliz/encluca`), perché i client 0.2.0 cercano ancora lì.
+   Il repository del codice può diventare privato solo quando tutti i client sono almeno alla 0.2.1.
+   Dopo il passaggio verifica che l'immagine Docker resti scaricabile senza login:
+   `docker logout ghcr.io; docker pull ghcr.io/vonausterliz/encluca:latest`.
 6. Immagine Docker per l'hub: la costruisce il workflow di GitHub al push del tag. L'hub su TrueNAS si aggiorna a mano: Apps → encluca → Stop, poi Start.

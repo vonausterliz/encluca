@@ -25,7 +25,7 @@ Un solo programma per Linux, macOS, Windows e TrueNAS. Niente componenti da inst
 
 ## Installazione
 
-Scarica il pacchetto per il tuo sistema dalla [pagina delle release](https://github.com/vonausterliz/encluca/releases/latest).
+Scarica il pacchetto per il tuo sistema dalla [pagina delle release](https://github.com/vonausterliz/encluca-releases/releases/latest).
 
 | Dove | Pacchetto | Guida |
 |---|---|---|
