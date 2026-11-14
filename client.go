@@ -630,7 +630,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 				st.Del, st.SHA, st.Size = true, "", 0
 				st.Pending = "del"
 			}
-			if rel, err := c.cip.DecryptPath(enc); err == nil {
+			if rel, err := c.plainRelLocked(enc); err == nil {
 				if st.Dir {
 					c.log.Printf(T("Cartella non più vuota o eliminata: %s"), rel)
 				} else {
@@ -649,7 +649,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 // ---------- materializzazione (decifratura nella cartella aperta) ----------
 
 func (c *Client) decryptToWorkLocked(enc string, st *fstate) error {
-	rel, err := c.cip.DecryptPath(enc)
+	rel, err := c.plainRelLocked(enc)
 	if err != nil {
 		return fmt.Errorf(T("nome non decifrabile: %w"), err)
 	}
@@ -709,7 +709,7 @@ func (c *Client) applyDirLocked(e *Entry, st *fstate) {
 	open := c.st.Open && c.cip != nil
 	var full, rel string
 	if open {
-		if r, err := c.cip.DecryptPath(e.Path); err == nil {
+		if r, err := c.plainRelLocked(e.Path); err == nil {
 			rel, full = r, filepath.Join(c.cfg.WorkDir, filepath.FromSlash(r))
 		}
 	}
@@ -758,14 +758,25 @@ func (c *Client) removeEmptyDirsUpLocked(dir string) {
 	}
 }
 
-// removeIfOnlyJunk rimuove la cartella d se è vuota o contiene solo file ignorati.
+// osJunk riconosce i file di servizio creati dal sistema operativo, che si possono cancellare
+// senza perdere nulla. È più stretto di ignored: download in corso e file di blocco dei
+// programmi non si sincronizzano ma non vanno mai cancellati.
+func osJunk(name string) bool {
+	switch name {
+	case ".DS_Store", "Thumbs.db", "desktop.ini", ".directory":
+		return true
+	}
+	return strings.HasPrefix(name, "._")
+}
+
+// removeIfOnlyJunk rimuove la cartella d se è vuota o contiene solo file di servizio del sistema.
 func removeIfOnlyJunk(d string) bool {
 	ents, err := os.ReadDir(d)
 	if err != nil {
 		return false
 	}
 	for _, e := range ents {
-		if e.IsDir() || !ignored(e.Name()) {
+		if e.IsDir() || !osJunk(e.Name()) {
 			return false
 		}
 	}
@@ -794,7 +805,7 @@ func conflictName(rel, device string) string {
 // resolveConflictLocked sposta la versione locale in un file "(conflitto …)" che verrà caricato a parte.
 func (c *Client) resolveConflictLocked(enc string) error {
 	st := c.st.Files[enc]
-	rel, err := c.cip.DecryptPath(enc)
+	rel, err := c.plainRelLocked(enc)
 	if err != nil {
 		return err
 	}
@@ -847,7 +858,7 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	c.mu.Lock()
 	if c.cip != nil && c.st.Open {
 		// prima di decidere, cattura eventuali modifiche locali non ancora viste
-		if rel, err := c.cip.DecryptPath(e.Path); err == nil {
+		if rel, err := c.plainRelLocked(e.Path); err == nil {
 			if info, err := os.Stat(filepath.Join(c.cfg.WorkDir, filepath.FromSlash(rel))); err == nil && info.Mode().IsRegular() {
 				c.scanFileLocked(e.Path, rel, info)
 			}
@@ -904,7 +915,7 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 		os.Remove(c.mirrorPath(e.Path))
 		c.st.Files[e.Path] = &fstate{Rev: e.Rev, Del: true}
 		if c.st.Open && c.cip != nil {
-			if rel, err := c.cip.DecryptPath(e.Path); err == nil {
+			if rel, err := c.plainRelLocked(e.Path); err == nil {
 				full := filepath.Join(c.cfg.WorkDir, filepath.FromSlash(rel))
 				os.Remove(full)
 				// le cartelle rimaste vuote vanno tolte, altrimenti la scansione le
@@ -966,7 +977,7 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	if c.st.Open && c.cip != nil {
 		if err := c.decryptToWorkLocked(e.Path, nst); err != nil {
 			c.log.Printf(T("ERRORE decifratura %s: %v"), e.Path, err)
-		} else if rel, err := c.cip.DecryptPath(e.Path); err == nil {
+		} else if rel, err := c.plainRelLocked(e.Path); err == nil {
 			c.log.Printf(T("Aggiornato da un altro dispositivo: %s"), rel)
 		}
 	}
@@ -1622,7 +1633,21 @@ func (c *Client) Open(password string) error {
 			st.Plain = nil
 		}
 	}
+	// la cartella aperta conterrà i file in chiaro: deve essere una cartella vera, di questo
+	// utente e non accessibile ad altri (su un PC con più utenti qualcun altro potrebbe
+	// averla preparata, o aver cambiato il percorso dall'interfaccia locale)
+	if fi, err := os.Lstat(work); err == nil {
+		if fi.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf(T("%s è un collegamento simbolico: scegli una cartella vera"), work)
+		}
+		if !fi.IsDir() || !ownedByMe(fi) {
+			return fmt.Errorf(T("%s non è una cartella di questo utente: scegline un'altra"), work)
+		}
+	}
 	if err := os.MkdirAll(work, 0o700); err != nil {
+		return err
+	}
+	if err := restrictDir(work); err != nil {
 		return err
 	}
 	c.cip = cip
@@ -1637,7 +1662,7 @@ func (c *Client) Open(password string) error {
 			continue
 		}
 		if st.Dir {
-			if rel, err := c.cip.DecryptPath(enc); err == nil && os.MkdirAll(filepath.Join(work, filepath.FromSlash(rel)), 0o700) == nil {
+			if rel, err := c.plainRelLocked(enc); err == nil && os.MkdirAll(filepath.Join(work, filepath.FromSlash(rel)), 0o700) == nil {
 				st.Plain = &plainSnap{}
 			}
 			continue

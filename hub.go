@@ -276,7 +276,8 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 			writeErr(w, http.StatusUpgradeRequired, T("questo dispositivo usa una versione di encluca troppo vecchia per questo NAS: aggiornalo alla 0.2.2 o successiva"))
 			return
 		}
-		if v := r.Header.Get("X-Encluca-Version"); v != "" {
+		// solo versioni ben formate finiscono nella configurazione e nella pagina dei dispositivi
+		if v := strings.TrimPrefix(r.Header.Get("X-Encluca-Version"), "v"); v != "" && validVersion(v) {
 			h.mu.Lock()
 			if d.Version != v {
 				d.Version = v
@@ -624,6 +625,8 @@ func (h *Hub) putDir(w http.ResponseWriter, p, full string, base, mtime int64, d
 	c := *e
 	writeJSON(w, http.StatusOK, &c)
 }
+
+func validVersion(v string) bool { _, ok := parseVersion(v); return ok }
 
 // hasLiveDirLocked dice se enc è una voce cartella non cancellata.
 func (h *Hub) hasLiveDirLocked(enc string) bool {

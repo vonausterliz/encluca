@@ -170,3 +170,40 @@ func TestClientRefusesOldHub(t *testing.T) {
 		t.Fatalf("abbinamento con hub vecchio: %v", err)
 	}
 }
+
+// La versione dichiarata dal client finisce nella configurazione dell'hub e nella pagina
+// dei dispositivi: si accetta solo una versione ben formata.
+func TestHubStoresOnlyValidVersion(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("X")
+	call := func(v string) {
+		r, _ := http.NewRequest(http.MethodGet, env.srv.URL+"/api/v1/changes?since=0", nil)
+		r.Header.Set("Authorization", "Bearer "+tok)
+		r.Header.Set("X-Encluca-Proto", "2")
+		r.Header.Set("X-Encluca-Version", v)
+		hc := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+		resp, err := hc.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+	ver := func() string {
+		env.hub.mu.Lock()
+		defer env.hub.mu.Unlock()
+		for _, d := range env.hub.cfg.Devices {
+			if d.Name == "X" {
+				return d.Version
+			}
+		}
+		return "?"
+	}
+	call("0.2.2")
+	if ver() != "0.2.2" {
+		t.Fatalf("versione valida non registrata: %q", ver())
+	}
+	call("<script>alert(1)</script>" + strings.Repeat("A", 5000))
+	if ver() != "0.2.2" {
+		t.Fatalf("versione non valida registrata: %.40q", ver())
+	}
+}
