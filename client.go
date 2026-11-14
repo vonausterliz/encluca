@@ -80,6 +80,9 @@ type fstate struct {
 	Pending  string     `json:"pending,omitempty"`  // "" | "put" | "del"
 	Conflict int64      `json:"conflict,omitempty"` // revisione remota in conflitto, da risolvere a cassaforte aperta
 	Plain    *plainSnap `json:"plain,omitempty"`
+	// Dir: cartella vuota. Per le cartelle Plain è &plainSnap{} se la cartella esiste nella
+	// cartella aperta e nil se no (come per i file non materializzati).
+	Dir bool `json:"dir,omitempty"`
 }
 
 type clientState struct {
@@ -450,6 +453,8 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		return false, errors.New(c.lastErr)
 	}
 	seen := map[string]bool{}
+	var dirs []string             // cartelle incontrate (percorsi assoluti)
+	hasChild := map[string]bool{} // cartelle con almeno un elemento non ignorato
 	// la scansione percorre tutta la cartella: l'elenco dei problemi si ricostruisce da zero,
 	// così sparisce la segnalazione di un file rinominato o spostato
 	c.problems = map[string]string{}
@@ -474,7 +479,12 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 			}
 			return nil
 		}
-		if d.IsDir() || !d.Type().IsRegular() {
+		hasChild[filepath.Dir(p)] = true
+		if d.IsDir() {
+			dirs = append(dirs, p)
+			return nil
+		}
+		if !d.Type().IsRegular() {
 			return nil
 		}
 		rel, _ := filepath.Rel(work, p)
@@ -516,6 +526,39 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		}
 		return changed, nil
 	}
+	// cartelle vuote: hanno una voce propria (quelle con contenuto esistono già grazie ai file)
+	for _, p := range dirs {
+		if hasChild[p] {
+			continue
+		}
+		rel, _ := filepath.Rel(work, p)
+		rel = filepath.ToSlash(rel)
+		enc, err := c.encPathLocked(rel)
+		if err != nil {
+			c.problems[rel] = T("nome troppo lungo per essere cifrato: accorcialo")
+			if errors.Is(err, rcrypt.ErrNameLength) {
+				c.noteLongNameLocked(rel)
+			}
+			continue
+		}
+		seen[enc] = true
+		st := c.st.Files[enc]
+		if st != nil && st.Dir && !st.Del {
+			if st.Plain == nil {
+				st.Plain = &plainSnap{}
+			}
+			continue
+		}
+		ns := &fstate{Dir: true, Pending: "put", Plain: &plainSnap{}}
+		if st != nil {
+			ns.Rev = st.Rev // ricrea sopra una voce cancellata (o sostituisce un file con lo stesso nome)
+			os.Remove(c.mirrorPath(enc))
+		}
+		c.st.Files[enc] = ns
+		c.log.Printf(T("Nuova cartella: %s"), rel)
+		changed = true
+	}
+
 	// file spariti dalla cartella = cancellati dall'utente
 	var gone []string
 	live := 0
@@ -548,7 +591,11 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 				st.Pending = "del"
 			}
 			if rel, err := c.cip.DecryptPath(enc); err == nil {
-				c.log.Printf(T("Eliminato: %s"), rel)
+				if st.Dir {
+					c.log.Printf(T("Cartella non più vuota o eliminata: %s"), rel)
+				} else {
+					c.log.Printf(T("Eliminato: %s"), rel)
+				}
 			}
 			changed = true
 		}
@@ -1056,6 +1103,11 @@ func (c *Client) pushOnce(ctx context.Context) {
 		var err error
 		switch j.st.Pending {
 		case "put":
+			if j.st.Dir {
+				q := url.Values{"p": {j.enc}, "base": {strconv.FormatInt(j.st.Rev, 10)}, "dir": {"1"}, "mtime": {strconv.FormatInt(j.st.MTime, 10)}}
+				resp, err = c.req(ctx, http.MethodPut, "/api/v1/file", q, nil, -1)
+				break
+			}
 			f, ferr := os.Open(c.mirrorPath(j.enc))
 			if ferr != nil {
 				continue // sostituito nel frattempo: riprova al prossimo giro
@@ -1074,6 +1126,17 @@ func (c *Client) pushOnce(ctx context.Context) {
 			st := c.st.Files[j.enc]
 			switch {
 			case st == nil:
+			case se.Code == http.StatusConflict && j.st.Pending == "put" && st.Dir:
+				// cartella vuota: nessun contenuto da salvare, quindi nessuna copia di conflitto
+				switch {
+				case cur.Dir && !cur.Del: // creata anche altrove
+					st.Rev, st.Pending = cur.Rev, ""
+				case !cur.Dir && !cur.Del && cur.Rev > 0: // sul NAS è un file: vince il file
+					delete(c.st.Files, j.enc)
+					c.st.Seq = 0
+				default:
+					st.Rev = cur.Rev // ricrea sopra la voce attuale al prossimo giro
+				}
 			case se.Code == http.StatusConflict && j.st.Pending == "put":
 				st.Conflict = max(cur.Rev, st.Rev+1)
 			case se.Code == http.StatusConflict && j.st.Pending == "del":
@@ -1428,6 +1491,12 @@ func (c *Client) Open(password string) error {
 		if st.Del || (recovering && st.Plain != nil) {
 			continue
 		}
+		if st.Dir {
+			if rel, err := c.cip.DecryptPath(enc); err == nil && os.MkdirAll(filepath.Join(work, filepath.FromSlash(rel)), 0o700) == nil {
+				st.Plain = &plainSnap{}
+			}
+			continue
+		}
 		if _, err := os.Stat(c.mirrorPath(enc)); err != nil {
 			continue
 		}
@@ -1547,7 +1616,7 @@ func (c *Client) Status() map[string]any {
 	defer c.mu.Unlock()
 	var files, pending, deferred int
 	for _, st := range c.st.Files {
-		if !st.Del {
+		if !st.Del && !st.Dir {
 			files++
 		}
 		if st.Pending != "" {

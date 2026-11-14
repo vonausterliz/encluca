@@ -600,6 +600,13 @@ func (h *Hub) putDir(w http.ResponseWriter, p, full string, base, mtime int64, d
 		writeJSON(w, http.StatusConflict, &c)
 		return
 	}
+	if cur != nil && !cur.Del && !cur.Dir {
+		// al posto di un file ora c'è una cartella vuota: il file va nel cestino, non perso
+		if err := h.trashFileLocked(full, cur, d.ID); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	if err := os.MkdirAll(full, 0o700); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
