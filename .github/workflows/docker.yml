@@ -1,11 +1,12 @@
-# Pubblica l'immagine dell'hub su ghcr.io a ogni release (o a mano, indicando il tag).
+# Pubblica l'immagine dell'hub su ghcr.io al push di un tag vX.Y.Z (o a mano, indicando il tag).
+# Le release ora stanno in vonausterliz/encluca-releases, quindi il segnale è il tag, non la release.
 # Le Actions sono fissate a uno SHA (il commento indica la versione): un tag spostato da chi
 # controlla il repository dell'Action non può cambiare ciò che gira qui.
 name: Immagine Docker
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -23,7 +24,7 @@ jobs:
       - name: Scelta del tag
         id: tag
         run: |
-          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          TAG="${{ inputs.tag || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
       # sorgente della release richiesta…
