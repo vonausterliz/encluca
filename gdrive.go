@@ -582,10 +582,13 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		}
 		key := g.st.VaultID + "|" + p
 		if id, ok := g.st.Folders[key]; ok {
-			if err = g.trashFolderIfEmpty(ctx, c, id); err != nil {
+			var trashed bool
+			if trashed, err = g.trashFolderIfEmpty(ctx, c, id); err != nil {
 				return
 			}
-			delete(g.st.Folders, key)
+			if trashed { // una cartella con contenuto resta, e resta nota, per non duplicarla
+				delete(g.st.Folders, key)
+			}
 		}
 		delete(g.st.Dirs, p)
 	}
@@ -681,22 +684,23 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 }
 
 // trashFolderIfEmpty mette nel cestino di Drive la cartella id, se non contiene nulla.
-func (g *GDrive) trashFolderIfEmpty(ctx context.Context, c GDriveConfig, id string) error {
+// Restituisce true se la cartella non c'è più.
+func (g *GDrive) trashFolderIfEmpty(ctx context.Context, c GDriveConfig, id string) (bool, error) {
 	q := url.QueryEscape(fmt.Sprintf("'%s' in parents and trashed = false", strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(id)))
 	var out struct {
 		Files []struct{ ID string } `json:"files"`
 	}
 	if err := g.jsonCall(ctx, c, http.MethodGet, gDriveAPI+"/files?pageSize=1&fields=files(id)&q="+q, nil, &out); err != nil {
-		return err
+		return false, err
 	}
 	if len(out.Files) > 0 {
-		return nil
+		return false, nil
 	}
 	err := g.jsonCall(ctx, c, http.MethodPatch, gDriveAPI+"/files/"+id, map[string]any{"trashed": true}, nil)
 	if isNotFound(err) {
-		return nil
+		return true, nil
 	}
-	return err
+	return err == nil, err
 }
 
 // findByName elenca i file (non cartelle) chiamati name nella cartella parent.

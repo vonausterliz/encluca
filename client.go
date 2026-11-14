@@ -124,6 +124,8 @@ type Client struct {
 	busy         string
 	pullReset    chan struct{}
 
+	hubProtoOK bool // l'ultima risposta del NAS dichiarava il protocollo 2: si può scrivere
+
 	upd      *updater      // nil se l'aggiornamento automatico non è disponibile
 	updating bool          // installazione in corso: la cassaforte non si apre
 	restart  chan struct{} // segnala a runClient di riavviare il servizio
@@ -272,6 +274,16 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 		c.lastErr = T("questo dispositivo è stato revocato dal NAS: abbinalo di nuovo")
 		c.mu.Unlock()
 		return nil, errors.New(T("dispositivo revocato"))
+	}
+	hp, _ := strconv.Atoi(resp.Header.Get("X-Encluca-Proto"))
+	c.mu.Lock()
+	c.hubProtoOK = hp >= protoVersion
+	c.mu.Unlock()
+	if hp < protoVersion {
+		// hub più vecchio della 0.2.2: non conosce le cartelle vuote e le salverebbe come file
+		resp.Body.Close()
+		c.setOnline(false, T("il NAS usa una versione di encluca troppo vecchia: aggiorna l'hub alla 0.2.2 o successiva"))
+		return nil, errors.New(T("NAS da aggiornare"))
 	}
 	c.setOnline(true, "")
 	if resp.StatusCode >= 300 {
@@ -1136,6 +1148,18 @@ func (c *Client) ConfirmRecvDeletes() {
 // ---------- invio delle modifiche locali ----------
 
 func (c *Client) pushOnce(ctx context.Context) {
+	// prima di scrivere sul NAS ci si assicura che sia aggiornato: la verifica sulla risposta
+	// arriverebbe tardi, a scrittura già fatta
+	c.mu.Lock()
+	protoOK := c.hubProtoOK
+	c.mu.Unlock()
+	if !protoOK {
+		resp, err := c.req(ctx, http.MethodGet, "/api/v1/ping", nil, nil, -1)
+		if err != nil {
+			return
+		}
+		resp.Body.Close()
+	}
 	c.mu.Lock()
 	type job struct {
 		enc string

@@ -5,8 +5,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -101,5 +103,70 @@ func TestClientShowsUpgradeError(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	if c.Status()["revoked"] == true {
 		t.Fatal("il client non deve risultare revocato")
+	}
+}
+
+// Un hub vecchio (0.2.1) non conosce le cartelle: il client non deve sincronizzare con lui,
+// altrimenti una cartella vuota diventerebbe un file vuoto sul NAS.
+func TestClientRefusesOldHub(t *testing.T) {
+	env := newTestEnv(t)
+	inner := env.hub.handler()
+	var oldHub atomic.Bool
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !oldHub.Load() {
+			inner.ServeHTTP(w, r)
+			return
+		}
+		r.Header.Set("X-Encluca-Proto", "2") // l'hub vecchio non controlla il protocollo...
+		rec := httptest.NewRecorder()
+		inner.ServeHTTP(rec, r)
+		for k, v := range rec.Header() {
+			if k != "X-Encluca-Proto" { // ...e non lo dichiara nelle risposte
+				w.Header()[k] = v
+			}
+		}
+		w.WriteHeader(rec.Code)
+		w.Write(rec.Body.Bytes())
+	}))
+	srv.TLS = &tls.Config{Certificates: []tls.Certificate{env.hub.cert}}
+	srv.StartTLS()
+	defer srv.Close()
+	env.srv.Close()
+	env.srv = srv
+	dir := t.TempDir()
+	c, err := newClient(filepath.Join(dir, "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.cfg.WorkDir = filepath.Join(dir, "w")
+	if err := c.Pair(env.pairCode("PC"), "", "PC"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CreateVault("una password lunga e sicura"); err != nil {
+		t.Fatal(err)
+	}
+	// il client si riavvia (es. dopo l'aggiornamento alla 0.2.2) mentre l'hub è ancora vecchio
+	oldHub.Store(true)
+	c, err = newClient(filepath.Join(dir, "data"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Open("una password lunga e sicura"); err != nil {
+		t.Fatal(err) // la cassaforte si apre anche con il NAS da aggiornare (metadati in cache)
+	}
+	c.run(env.ctx)
+	os.MkdirAll(filepath.Join(c.cfg.WorkDir, "Vuota"), 0o700)
+	waitFor(t, "errore NAS da aggiornare", func() bool {
+		s, _ := c.Status()["lastError"].(string)
+		return strings.Contains(s, "NAS") && strings.Contains(s, "0.2.2")
+	})
+	time.Sleep(3 * time.Second)
+	if n := env.hubFiles(); n != 0 {
+		t.Fatalf("il client ha scritto %d voci su un hub vecchio", n)
+	}
+	// e non ci si abbina a un hub vecchio
+	c2, _ := newClient(filepath.Join(dir, "data2"))
+	if err := c2.Pair(env.pairCode("PC2"), "", "PC2"); err == nil || !strings.Contains(err.Error(), "aggiorn") {
+		t.Fatalf("abbinamento con hub vecchio: %v", err)
 	}
 }

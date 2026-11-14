@@ -346,6 +346,9 @@ func TestGDriveBackupDirRemoved(t *testing.T) {
 	if drive.folder(encF, g.st.VaultID) == nil {
 		t.Fatal("una cartella con contenuto non deve finire nel cestino")
 	}
+	if g.st.Folders[g.st.VaultID+"|"+encF] != ff.ID {
+		t.Fatal("la cartella non messa nel cestino deve restare in Folders (altrimenti verrebbe duplicata)")
+	}
 	if g.st.Dirs[encY] || g.st.Dirs[encF] {
 		t.Fatalf("Dirs: %v", g.st.Dirs)
 	}

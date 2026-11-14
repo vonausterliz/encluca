@@ -897,7 +897,18 @@ func (h *Hub) handler() http.Handler {
 		}
 		serveUI(w, "web/hub.html")
 	})
-	return securityHeaders(mux)
+	return securityHeaders(protoHeader(mux))
+}
+
+// protoHeader dichiara la versione del protocollo in ogni risposta dell'API dei dispositivi:
+// i client si rifiutano di sincronizzare con un hub che non la dichiara (troppo vecchio).
+func protoHeader(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("X-Encluca-Proto", strconv.Itoa(protoVersion))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (h *Hub) run(ctx context.Context) error {
