@@ -65,6 +65,7 @@ type browseItem struct {
 	P     string `json:"p"`     // percorso cifrato
 	Size  int64  `json:"size"`  // dimensione in chiaro
 	MTime int64  `json:"mtime"` // ns
+	Dir   bool   `json:"dir,omitempty"`
 }
 
 func (h *Hub) apiBrowseList(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +73,11 @@ func (h *Hub) apiBrowseList(w http.ResponseWriter, r *http.Request) {
 	items := make([]browseItem, 0, len(h.idx.Entries))
 	for p, e := range h.idx.Entries {
 		if !e.Del {
-			items = append(items, browseItem{p, rcrypt.DecryptedSize(e.Size), e.MTime})
+			if e.Dir {
+				items = append(items, browseItem{P: p, MTime: e.MTime, Dir: true})
+			} else {
+				items = append(items, browseItem{P: p, Size: rcrypt.DecryptedSize(e.Size), MTime: e.MTime})
+			}
 		}
 	}
 	h.mu.Unlock()

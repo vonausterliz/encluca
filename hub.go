@@ -41,6 +41,8 @@ type Entry struct {
 	Del   bool   `json:"del,omitempty"`
 	Seq   int64  `json:"seq"`
 	Dev   string `json:"dev,omitempty"`
+	// Dir: cartella vuota (nessun contenuto). Una cartella ha una voce solo se non contiene nulla.
+	Dir bool `json:"dir,omitempty"`
 }
 
 type hubIndex struct {
@@ -165,11 +167,19 @@ func (h *Hub) saveIndex() error { return saveJSON(h.indexPath(), &h.idx) }
 func (h *Hub) rebuildIndex() error {
 	h.idx = hubIndex{Entries: map[string]*Entry{}}
 	err := filepath.WalkDir(h.vaultDir(), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
 		}
 		rel, _ := filepath.Rel(h.vaultDir(), p)
 		rel = filepath.ToSlash(rel)
+		if d.IsDir() {
+			// una cartella senza contenuto è una cartella vuota della cassaforte
+			if ents, err := os.ReadDir(p); err == nil && len(ents) == 0 && p != h.vaultDir() && validEncPath(rel) {
+				h.idx.Seq++
+				h.idx.Entries[rel] = &Entry{Path: rel, Rev: 1, MTime: 0, Seq: h.idx.Seq, Dir: true}
+			}
+			return nil
+		}
 		if !validEncPath(rel) {
 			return nil
 		}
@@ -443,7 +453,7 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 		}
 		f, err := os.Open(full)
 		h.mu.Unlock()
-		if e == nil || e.Del || err != nil {
+		if e == nil || e.Del || e.Dir || err != nil {
 			if f != nil {
 				f.Close()
 			}
@@ -460,6 +470,10 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 	case http.MethodPut:
 		base, _ := strconv.ParseInt(r.URL.Query().Get("base"), 10, 64)
 		mtime, _ := strconv.ParseInt(r.URL.Query().Get("mtime"), 10, 64)
+		if r.URL.Query().Get("dir") == "1" {
+			h.putDir(w, p, full, base, mtime, d)
+			return
+		}
 		wantSHA := r.URL.Query().Get("sha")
 		tmp, err := os.CreateTemp(h.tmpDir(), "up-*")
 		if err != nil {
@@ -539,14 +553,18 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 			writeJSON(w, http.StatusOK, &c)
 			return
 		}
-		if err := h.trashFileLocked(full, cur, d.ID); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if cur.Dir {
+			os.Remove(full) // se nel frattempo contiene altro, resta
+			h.trashDirLocked(cur, d.ID)
+		} else if err := h.trashFileLocked(full, cur, d.ID); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			h.log.Printf(T("ERRORE spostamento nel cestino: %v"), err)
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		// rimuove le cartelle rimaste vuote
+		// rimuove le cartelle rimaste vuote, tranne quelle che sono voci cartella vive
 		for dir := filepath.Dir(full); dir != h.vaultDir() && strings.HasPrefix(dir, h.vaultDir()); dir = filepath.Dir(dir) {
-			if os.Remove(dir) != nil {
+			rel, _ := filepath.Rel(h.vaultDir(), dir)
+			if h.hasLiveDirLocked(filepath.ToSlash(rel)) || os.Remove(dir) != nil {
 				break
 			}
 		}
@@ -563,6 +581,44 @@ func (h *Hub) apiFile(w http.ResponseWriter, r *http.Request, d *Device) {
 	default:
 		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
 	}
+}
+
+// putDir crea (o ricrea) la voce di una cartella vuota: nessun contenuto, solo la cartella sul disco.
+func (h *Hub) putDir(w http.ResponseWriter, p, full string, base, mtime int64, d *Device) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	cur := h.idx.Entries[p]
+	var curRev int64
+	if cur != nil {
+		curRev = cur.Rev
+	}
+	if base != curRev {
+		c := Entry{Path: p}
+		if cur != nil {
+			c = *cur
+		}
+		writeJSON(w, http.StatusConflict, &c)
+		return
+	}
+	if err := os.MkdirAll(full, 0o700); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.idx.Seq++
+	e := &Entry{Path: p, Rev: curRev + 1, MTime: mtime, Seq: h.idx.Seq, Dev: d.ID, Dir: true}
+	h.idx.Entries[p] = e
+	if err := h.saveIndex(); err != nil {
+		h.log.Printf(T("ERRORE salvataggio indice: %v"), err)
+	}
+	h.broadcast()
+	c := *e
+	writeJSON(w, http.StatusOK, &c)
+}
+
+// hasLiveDirLocked dice se enc è una voce cartella non cancellata.
+func (h *Hub) hasLiveDirLocked(enc string) bool {
+	e := h.idx.Entries[enc]
+	return e != nil && e.Dir && !e.Del
 }
 
 // ---------- amministrazione ----------
@@ -642,7 +698,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	var files int
 	var size int64
 	for _, e := range h.idx.Entries {
-		if !e.Del {
+		if !e.Del && !e.Dir {
 			files++
 			size += e.Size
 		}

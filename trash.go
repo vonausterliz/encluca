@@ -24,6 +24,7 @@ type trashItem struct {
 	MTime   int64  `json:"mtime"`
 	Deleted int64  `json:"deleted"` // unix nano
 	Dev     string `json:"dev,omitempty"`
+	Dir     bool   `json:"dir,omitempty"` // cartella vuota: nessun file in trash/
 }
 
 func (h *Hub) trashDir() string       { return filepath.Join(h.dir, "trash") }
@@ -57,6 +58,13 @@ func (h *Hub) trashFileLocked(full string, e *Entry, dev string) error {
 	return nil
 }
 
+// trashDirLocked registra nel cestino una cartella vuota cancellata (non c'è nessun file da spostare).
+func (h *Hub) trashDirLocked(e *Entry, dev string) {
+	h.trash = append(h.trash, trashItem{Path: e.Path, MTime: e.MTime, Deleted: time.Now().UnixNano(), Dev: dev, Dir: true})
+	h.purgeTrashLocked()
+	h.saveTrashLocked()
+}
+
 // purgeTrashLocked elimina definitivamente gli elementi più vecchi di trashRetention.
 func (h *Hub) purgeTrashLocked() {
 	limit := time.Now().Add(-trashRetention).UnixNano()
@@ -64,7 +72,9 @@ func (h *Hub) purgeTrashLocked() {
 	purged := false
 	for _, it := range h.trash {
 		if it.Deleted < limit {
-			os.Remove(filepath.Join(h.trashDir(), it.File))
+			if !it.Dir {
+				os.Remove(filepath.Join(h.trashDir(), it.File))
+			}
 			purged = true
 			continue
 		}
@@ -114,7 +124,11 @@ func (h *Hub) restoreTrashLocked(since int64) int {
 			continue // nel frattempo il file è stato ricreato: la versione attuale prevale
 		}
 		full := filepath.Join(h.vaultDir(), filepath.FromSlash(it.Path))
-		if os.MkdirAll(filepath.Dir(full), 0o700) != nil || os.Rename(filepath.Join(h.trashDir(), it.File), full) != nil {
+		if it.Dir {
+			if os.MkdirAll(full, 0o700) != nil {
+				continue
+			}
+		} else if os.MkdirAll(filepath.Dir(full), 0o700) != nil || os.Rename(filepath.Join(h.trashDir(), it.File), full) != nil {
 			continue
 		}
 		if it.MTime > 0 {
@@ -126,7 +140,7 @@ func (h *Hub) restoreTrashLocked(since int64) int {
 			rev = cur.Rev
 		}
 		h.idx.Seq++
-		h.idx.Entries[it.Path] = &Entry{Path: it.Path, Rev: rev + 1, Size: it.Size, SHA: it.SHA, MTime: it.MTime, Seq: h.idx.Seq, Dev: "trash"}
+		h.idx.Entries[it.Path] = &Entry{Path: it.Path, Rev: rev + 1, Size: it.Size, SHA: it.SHA, MTime: it.MTime, Seq: h.idx.Seq, Dev: "trash", Dir: it.Dir}
 		restored = append(restored, i)
 	}
 	if len(restored) == 0 {
