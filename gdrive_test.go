@@ -30,6 +30,7 @@ type fakeFile struct {
 	ID, Name, Mime string
 	Parents        []string
 	Data           []byte
+	Trashed        bool
 }
 
 var (
@@ -84,6 +85,9 @@ func (d *fakeDrive) serve(w http.ResponseWriter, r *http.Request) {
 			if m := reMimeNeq.FindStringSubmatch(q); m != nil && f.Mime == m[1] {
 				continue
 			}
+			if f.Trashed && strings.Contains(q, "trashed = false") {
+				continue
+			}
 			out = append(out, map[string]string{"id": f.ID, "name": f.Name})
 		}
 		d.mu.Unlock()
@@ -103,7 +107,16 @@ func (d *fakeDrive) serve(w http.ResponseWriter, r *http.Request) {
 		case http.MethodDelete:
 			delete(d.files, id)
 			w.WriteHeader(http.StatusNoContent)
-		case http.MethodPatch: // spostamento
+		case http.MethodPatch: // spostamento o cestino
+			var body struct {
+				Trashed bool `json:"trashed"`
+			}
+			json.NewDecoder(r.Body).Decode(&body)
+			if body.Trashed {
+				f.Trashed = true
+				json.NewEncoder(w).Encode(map[string]string{"id": f.ID})
+				return
+			}
 			add, rem := r.URL.Query().Get("addParents"), r.URL.Query().Get("removeParents")
 			var ps []string
 			for _, x := range f.Parents {
@@ -273,4 +286,70 @@ func TestBackupGracefulStop(t *testing.T) {
 		t.Fatal(g.lastErr)
 	}
 	checkNoDuplicates(t, drive, g, 12)
+}
+
+// folder restituisce la cartella (non nel cestino) chiamata name dentro parent.
+func (d *fakeDrive) folder(name, parent string) *fakeFile {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, f := range d.files {
+		if f.Mime == folderMime && f.Name == name && contains(f.Parents, parent) && !f.Trashed {
+			return f
+		}
+	}
+	return nil
+}
+
+func TestGDriveBackupEmptyDir(t *testing.T) {
+	env, _, drive := setupBackup(t, 1)
+	tok := env.deviceToken("X")
+	if code, body := env.apiCall(t, http.MethodPut, "/api/v1/file?p="+encY+"&base=0&dir=1", tok, "2", nil); code != 200 {
+		t.Fatalf("put dir: %d %s", code, body)
+	}
+	g := env.hub.gd
+	g.runBackup(context.Background(), g.cfg())
+	if g.lastErr != "" {
+		t.Fatal(g.lastErr)
+	}
+	if drive.folder(encY, g.st.VaultID) == nil {
+		t.Fatal("cartella vuota assente su Drive")
+	}
+	if n := drive.vaultCopies(g.st.VaultID)[encY]; n != 0 {
+		t.Fatalf("la cartella vuota è stata caricata come file (%d copie)", n)
+	}
+}
+
+func TestGDriveBackupDirRemoved(t *testing.T) {
+	env, _, drive := setupBackup(t, 1)
+	tok := env.deviceToken("X")
+	env.apiCall(t, http.MethodPut, "/api/v1/file?p="+encY+"&base=0&dir=1", tok, "2", nil)
+	env.apiCall(t, http.MethodPut, "/api/v1/file?p="+encF+"&base=0&dir=1", tok, "2", nil)
+	g := env.hub.gd
+	g.runBackup(context.Background(), g.cfg())
+	fy, ff := drive.folder(encY, g.st.VaultID), drive.folder(encF, g.st.VaultID)
+	if fy == nil || ff == nil {
+		t.Fatal("cartelle assenti su Drive")
+	}
+	// in encF compare un file su Drive (caricato fuori da encluca): quella cartella non va toccata
+	drive.mu.Lock()
+	drive.files["extra"] = &fakeFile{ID: "extra", Name: "x", Mime: "application/octet-stream", Parents: []string{ff.ID}}
+	drive.mu.Unlock()
+	env.apiCall(t, http.MethodDelete, "/api/v1/file?p="+encY+"&base=1", tok, "2", nil)
+	env.apiCall(t, http.MethodDelete, "/api/v1/file?p="+encF+"&base=1", tok, "2", nil)
+	g.runBackup(context.Background(), g.cfg())
+	if g.lastErr != "" {
+		t.Fatal(g.lastErr)
+	}
+	if drive.folder(encY, g.st.VaultID) != nil {
+		t.Fatal("la cartella vuota eliminata è ancora su Drive")
+	}
+	if drive.folder(encF, g.st.VaultID) == nil {
+		t.Fatal("una cartella con contenuto non deve finire nel cestino")
+	}
+	if g.st.Dirs[encY] || g.st.Dirs[encF] {
+		t.Fatalf("Dirs: %v", g.st.Dirs)
+	}
+	if _, ok := g.st.Folders[g.st.VaultID+"|"+encY]; ok {
+		t.Fatal("la cartella eliminata è ancora in Folders")
+	}
 }

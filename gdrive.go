@@ -45,6 +45,8 @@ type gdState struct {
 	ReadmeID   string             `json:"readmeId"`
 	Folders    map[string]string  `json:"folders"`
 	Files      map[string]*gdFile `json:"files"`
+	// Dirs: cartelle vuote della cassaforte già create su Drive (l'ID è in Folders)
+	Dirs map[string]bool `json:"dirs,omitempty"`
 	// Clean è vero se l'ultimo giro è terminato regolarmente. Se è falso (arresto brusco),
 	// alcuni file potrebbero essere stati caricati senza essere registrati: il giro
 	// successivo controlla su Drive prima di caricare, per non creare doppioni.
@@ -549,12 +551,44 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 	}
 	g.h.mu.Lock()
 	live := map[string]liveFile{}
+	liveDirs := map[string]bool{}
 	for p, e := range g.h.idx.Entries {
-		if !e.Del {
+		switch {
+		case e.Del:
+		case e.Dir:
+			liveDirs[p] = true
+		default:
 			live[p] = liveFile{e.SHA, e.Size}
 		}
 	}
 	g.h.mu.Unlock()
+
+	// cartelle vuote: solo la cartella, nessun contenuto
+	if g.st.Dirs == nil {
+		g.st.Dirs = map[string]bool{}
+	}
+	for p := range liveDirs {
+		if g.st.Dirs[p] {
+			continue
+		}
+		if _, err = g.ensureFolder(ctx, c, g.st.VaultID, p); err != nil {
+			return
+		}
+		g.st.Dirs[p] = true
+	}
+	for p := range g.st.Dirs {
+		if liveDirs[p] {
+			continue
+		}
+		key := g.st.VaultID + "|" + p
+		if id, ok := g.st.Folders[key]; ok {
+			if err = g.trashFolderIfEmpty(ctx, c, id); err != nil {
+				return
+			}
+			delete(g.st.Folders, key)
+		}
+		delete(g.st.Dirs, p)
+	}
 
 	// elenco del lavoro da fare, per mostrare l'avanzamento
 	var todo []string
@@ -644,6 +678,25 @@ func (g *GDrive) backup(ctx context.Context, c GDriveConfig) (uploaded, moved in
 		g.st.Clean = true
 	}
 	return
+}
+
+// trashFolderIfEmpty mette nel cestino di Drive la cartella id, se non contiene nulla.
+func (g *GDrive) trashFolderIfEmpty(ctx context.Context, c GDriveConfig, id string) error {
+	q := url.QueryEscape(fmt.Sprintf("'%s' in parents and trashed = false", strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(id)))
+	var out struct {
+		Files []struct{ ID string } `json:"files"`
+	}
+	if err := g.jsonCall(ctx, c, http.MethodGet, gDriveAPI+"/files?pageSize=1&fields=files(id)&q="+q, nil, &out); err != nil {
+		return err
+	}
+	if len(out.Files) > 0 {
+		return nil
+	}
+	err := g.jsonCall(ctx, c, http.MethodPatch, gDriveAPI+"/files/"+id, map[string]any{"trashed": true}, nil)
+	if isNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // findByName elenca i file (non cartelle) chiamati name nella cartella parent.
