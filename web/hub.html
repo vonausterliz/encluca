@@ -39,6 +39,7 @@
       <a href="#file"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></svg>File</a>
       <a href="#dispositivi"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v10H4zm-2 12h20v-1H2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>Dispositivi</a>
       <a href="#cestino"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1 12H7z"/></svg>Cestino</a>
+      <a href="#ripristino"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg>Ripristino</a>
       <a href="#drive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.5 7.5 0 0 0 5.35 8.04 6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96"/></svg>Backup Google Drive</a>
       <a href="#impostazioni"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7 7 0 0 0-1.7-1L15 3h-4l-.4 2.7a7 7 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1a7 7 0 0 0 1.7 1L11 21h4l.4-2.7a7 7 0 0 0 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7"/></svg>Impostazioni</a>
       <a href="#registro"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 6h18v2H3zm0 6h12v2H3z"/></svg>Registro</a>
@@ -137,6 +138,21 @@
         </div>
       </div>
 
+      <div class="card" id="ripristino">
+        <div class="card-header"><h2>Riporta tutto com'era</h2><span class="chip" id="vrChip">–</span></div>
+        <div class="card-body">
+          <p>Se un virus o un errore ha rovinato molti file, puoi riportare la cassaforte a com'era in un certo momento: i file modificati tornano alla versione di allora e quelli eliminati ricompaiono. I file creati dopo restano dove sono.</p>
+          <label for="vrAt">Riporta com'era il</label>
+          <div class="row">
+            <input id="vrAt" type="datetime-local">
+            <button id="vrCheck" class="primary">Controlla</button>
+            <button id="vrDo" class="danger hidden">Riporta com'era</button>
+          </div>
+          <div class="msg" id="vrMsg"></div>
+          <p class="hint">I computer ricevono le modifiche come normali aggiornamenti. Per annullare, ripeti l'operazione scegliendo un momento di poco precedente a questo ripristino.</p>
+        </div>
+      </div>
+
       <div class="card" id="drive">
         <div class="card-header"><h2>Backup su Google Drive</h2><span class="chip" id="gdChip">–</span></div>
         <div class="card-body">
@@ -177,6 +193,13 @@
           <label for="langSel" style="margin-top:0">Lingua / Language</label>
           <select id="langSel"><option value="it">Italiano</option><option value="en">English</option></select>
           <p class="hint">Vale per questa pagina, per il registro e per i messaggi dell'hub.</p>
+          <label for="vKeep" style="margin-top:20px">Versioni precedenti da conservare per ogni file</label>
+          <div class="row"><input id="vKeep" type="number" min="0" max="100" style="width:90px"><span class="hint" style="margin:0">0 = non conservare</span></div>
+          <label for="vAge">Elimina le versioni più vecchie di (giorni)</label>
+          <div class="row"><input id="vAge" type="number" min="0" max="3650" style="width:90px"><span class="hint" style="margin:0">0 = mai</span><button id="vSave" class="primary small">Salva</button></div>
+          <div class="msg" id="vMsg"></div>
+          <p class="hint" id="vSpace" data-noi18n></p>
+          <p class="hint">Quando un file viene modificato, il NAS conserva (cifrata) la versione precedente. Le versioni stanno solo sul NAS, non nel backup su Drive.</p>
           <label class="check" style="margin-top:20px"><input type="checkbox" id="brEnable"> Consenti di sfogliare la cassaforte da questa pagina</label>
           <p class="hint">La password viene digitata in una pagina inviata dal NAS e la decifratura avviene nel browser. Se il NAS venisse compromesso, la pagina potrebbe essere alterata per intercettarla: lascia l'opzione spenta se non ti serve.</p>
         </div>
@@ -193,6 +216,16 @@
 const $ = id => document.getElementById(id);
 /*I18N*/
 const EN = {
+ 'Ripristino':'Restore',"Riporta tutto com'era":'Bring everything back',"Se un virus o un errore ha rovinato molti file, puoi riportare la cassaforte a com'era in un certo momento: i file modificati tornano alla versione di allora e quelli eliminati ricompaiono. I file creati dopo restano dove sono.":'If a virus or a mistake damaged many files, you can bring the vault back to how it was at a given moment: modified files return to the version they had then, and deleted ones reappear. Files created later stay where they are.',
+ "Riporta com'era il":'Bring back to','Controlla':'Check',"Riporta com'era":'Bring it back',"I computer ricevono le modifiche come normali aggiornamenti. Per annullare, ripeti l'operazione scegliendo un momento di poco precedente a questo ripristino.":'Computers receive the changes as normal updates. To undo, repeat the operation choosing a moment just before this restore.',
+ 'Versioni precedenti da conservare per ogni file':'Previous versions to keep for each file','0 = non conservare':'0 = do not keep','Elimina le versioni più vecchie di (giorni)':'Delete versions older than (days)','0 = mai':'0 = never','Salva':'Save','Salvato.':'Saved.',
+ 'Quando un file viene modificato, il NAS conserva (cifrata) la versione precedente. Le versioni stanno solo sul NAS, non nel backup su Drive.':'When a file is modified, the NAS keeps the previous version (encrypted). Versions are stored only on the NAS, not in the Drive backup.',
+ 'Spazio occupato: versioni {v} ({n} file) · cestino {c}':'Space used: versions {v} ({n} files) · trash {c}','{n} versioni':'{n} versions','Nessuna versione':'No versions',
+ 'Niente da riportare indietro per quella data.':'Nothing to bring back for that date.','File che tornano alla versione di allora: {c}. File eliminati che ricompaiono: {u}.':'Files returning to the version they had then: {c}. Deleted files coming back: {u}.',
+ "Riportare la cassaforte a com'era il {d}? I computer riceveranno le modifiche.":'Bring the vault back to how it was on {d}? Computers will receive the changes.',
+ 'Fatto. File riportati alla versione di allora: {c}. File eliminati recuperati: {u}. Arriveranno sui computer al prossimo allineamento.':'Done. Files returned to the version they had then: {c}. Deleted files recovered: {u}. They will reach the computers at the next sync.',
+ 'Versioni':'Versions','Nessuna versione precedente di questo file.':'No previous versions of this file.','Sostituita il {d} · {s}':'Replaced on {d} · {s}','Ripristina':'Restore',
+ 'Ripristinare questa versione di “{n}”? La versione attuale resta tra le versioni precedenti.':'Restore this version of “{n}”? The current version stays among the previous versions.',
  'encluca · NAS':'encluca · NAS',"Amministrazione dell'hub sul NAS":'NAS hub administration','Password amministratore':'Administrator password',
  "Al primo avvio la trovi nei log dell'app o nel file":'On first start you find it in the app logs or in the file','della cartella dati.':'in the data folder.',
  'Accedi':'Log in','Esci':'Log out','Sezioni':'Sections','Panoramica':'Overview','Dispositivi':'Devices','Backup Google Drive':'Google Drive backup',
@@ -306,6 +339,11 @@ async function refresh(){
   $('trChip').className = 'chip ' + (tr.files ? 'info' : 'ok'); $('trChip').textContent = tr.files ? t('{n} file', {n:tr.files}) : t('Vuoto');
   $('trInfo').textContent = tr.files ? t('{n} file eliminati ({s}), il più vecchio del {d}.', {n:tr.files, s:size(tr.bytes), d:new Date(tr.oldest).toLocaleString(LOCALE())}) : t('Nessun file eliminato negli ultimi 30 giorni.');
   $('trDay').disabled = $('trAll').disabled = !tr.files;
+  const vs = s.versions || {files:0, bytes:0, keep:5, maxAgeDays:90};
+  if(document.activeElement !== $('vKeep')) $('vKeep').value = vs.keep;
+  if(document.activeElement !== $('vAge')) $('vAge').value = vs.maxAgeDays;
+  $('vSpace').textContent = t('Spazio occupato: versioni {v} ({n} file) · cestino {c}', {v:size(vs.bytes), n:vs.files, c:size(tr.bytes||0)});
+  $('vrChip').className = 'chip ' + (vs.files ? 'info' : ''); $('vrChip').textContent = vs.files ? t('{n} versioni', {n:vs.files}) : t('Nessuna versione');
   const g = s.gdrive;
   let c, st;
   if(!g.configured){ c=['wait',t('Non configurato')]; st=t('Il backup su Google Drive non è ancora configurato.'); }
@@ -349,6 +387,24 @@ $('pwBtn').onclick = async () => {
 const restoreTrash = async hours => {
   if(!confirm(hours ? t('Ripristinare i file eliminati nelle ultime 24 ore?') : t('Ripristinare tutti i file del cestino?'))) return;
   try{ const r = await api('/admin/api/trash/restore', {Hours:hours}); $('trMsg').textContent = t('Ripristinati {n} file: arriveranno sui computer al prossimo allineamento.', {n:r.restored}); refresh(); }catch(e){ $('trMsg').textContent=e.message; } };
+$('vSave').onclick = async () => {
+  try{ await api('/admin/api/versions/config', {Keep:+$('vKeep').value, MaxAgeDays:+$('vAge').value}); $('vMsg').textContent = t('Salvato.'); refresh(); }catch(e){ $('vMsg').textContent = e.message; } };
+const vrIso = () => { const v = $('vrAt').value; return v ? new Date(v).toISOString() : ''; };
+(() => { const d = new Date(Date.now() - 24*3600*1000), p = n => String(n).padStart(2, '0');
+  $('vrAt').value = d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes()); })();
+$('vrAt').onchange = () => { $('vrDo').classList.add('hidden'); $('vrMsg').textContent = ''; };
+$('vrCheck').onclick = async () => {
+  $('vrDo').classList.add('hidden');
+  try{ const r = await api('/admin/api/versions/restore-at', {At:vrIso(), DryRun:true});
+    if(!r.changed && !r.undeleted){ $('vrMsg').textContent = t('Niente da riportare indietro per quella data.'); return; }
+    $('vrMsg').textContent = t('File che tornano alla versione di allora: {c}. File eliminati che ricompaiono: {u}.', {c:r.changed, u:r.undeleted});
+    $('vrDo').classList.remove('hidden');
+  }catch(e){ $('vrMsg').textContent = e.message; } };
+$('vrDo').onclick = async () => {
+  if(!confirm(t('Riportare la cassaforte a com\'era il {d}? I computer riceveranno le modifiche.', {d:new Date($('vrAt').value).toLocaleString(LOCALE())}))) return;
+  try{ const r = await api('/admin/api/versions/restore-at', {At:vrIso()}); $('vrDo').classList.add('hidden');
+    $('vrMsg').textContent = t('Fatto. File riportati alla versione di allora: {c}. File eliminati recuperati: {u}. Arriveranno sui computer al prossimo allineamento.', {c:r.changed, u:r.undeleted}); refresh();
+  }catch(e){ $('vrMsg').textContent = e.message; } };
 $('trDay').onclick = () => restoreTrash(24);
 $('trAll').onclick = () => restoreTrash(0);
 $('addBtn').onclick = async () => { try{ const r = await api('/admin/api/devices', {Name:$('devName').value, HubURL:$('devUrl').value}); $('codeText').textContent = r.code; $('codeBox').classList.remove('hidden'); $('copyBtn').textContent=t('Copia codice'); $('devName').value=''; refresh(); }catch(e){ alert(e.message); } };
@@ -428,15 +484,40 @@ function renderBrowse(){
   }
   for(const f of files){
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td><span class="fname">' + FILE_ICON + '<span></span></span></td><td></td><td></td><td style="text-align:right"><button class="ghost small"></button></td>';
+    tr.innerHTML = '<td><span class="fname">' + FILE_ICON + '<span></span></span></td><td></td><td></td><td style="text-align:right;white-space:nowrap"><button class="ghost small"></button> <button class="ghost small"></button></td>';
     tr.querySelector('.fname span').textContent = f.name;
     tr.children[1].textContent = f.size >= 0 ? size(f.size) : '?';
     tr.children[2].textContent = f.mtime ? new Date(f.mtime / 1e6).toLocaleString(LOCALE()) : '';
     const b = tr.querySelector('button'); b.textContent = t('Scarica');
     b.onclick = () => brDownload(f, b);
+    const vb = tr.querySelectorAll('button')[1]; vb.textContent = t('Versioni');
+    vb.onclick = () => brVersions(f, tr);
     tb.append(tr);
   }
   $('brOpenMsg').textContent = BR.tree.bad ? t('{n} elementi non decifrabili (salvati con un\'altra password?).', {n: BR.tree.bad}) : '';
+}
+// elenco delle versioni precedenti di un file, sotto la sua riga (un secondo clic lo chiude)
+async function brVersions(f, tr){
+  brTouch();
+  const next = tr.nextSibling;
+  if(next && next.classList && next.classList.contains('br-ver')){ next.remove(); return; }
+  const row = document.createElement('tr'); row.className = 'br-ver';
+  const td = document.createElement('td'); td.colSpan = 4; row.append(td); tr.after(row);
+  try{
+    const list = await api('/admin/api/vault/versions?p=' + encodeURIComponent(f.p));
+    if(!list.length){ td.textContent = t('Nessuna versione precedente di questo file.'); return; }
+    for(const v of list){
+      const d = document.createElement('div'); d.className = 'row'; d.style.margin = '4px 0 4px 30px';
+      const sp = document.createElement('span');
+      sp.textContent = t('Sostituita il {d} · {s}', {d:new Date(v.replaced / 1e6).toLocaleString(LOCALE()), s:v.size >= 0 ? size(v.size) : '?'});
+      const b = document.createElement('button'); b.className = 'ghost small'; b.textContent = t('Ripristina');
+      b.onclick = async () => {
+        if(!confirm(t('Ripristinare questa versione di “{n}”? La versione attuale resta tra le versioni precedenti.', {n:f.name}))) return;
+        try{ await api('/admin/api/vault/versions/restore', {P:f.p, ID:v.id}); BR.tree = buildTree(await api('/admin/api/vault/list')); renderBrowse(); refresh(); }
+        catch(e){ alert(e.message); } };
+      d.append(sp, b); td.append(d);
+    }
+  }catch(e){ td.textContent = e.message; }
 }
 async function brDownload(f, btn){
   brTouch(); btn.disabled = true; const label = btn.textContent; btn.textContent = t('Decifratura…');
