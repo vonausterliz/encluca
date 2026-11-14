@@ -241,10 +241,26 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 		r.ContentLength = size
 	}
 	r.Header.Set("Authorization", "Bearer "+tok)
+	r.Header.Set("X-Encluca-Proto", strconv.Itoa(protoVersion))
+	r.Header.Set("X-Encluca-Version", Version)
 	resp, err := c.hc.Do(r)
 	if err != nil {
 		c.setOnline(false, "NAS non raggiungibile")
 		return nil, err
+	}
+	if resp.StatusCode == http.StatusUpgradeRequired {
+		// il NAS è più nuovo di questo client: niente sincronizzazione finché non si aggiorna
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
+		resp.Body.Close()
+		var m struct {
+			Error string `json:"error"`
+		}
+		json.Unmarshal(b, &m)
+		if m.Error == "" {
+			m.Error = T("il NAS richiede una versione più recente di encluca: aggiorna questo computer")
+		}
+		c.setOnline(false, m.Error)
+		return nil, &httpStatusErr{resp.StatusCode, b}
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
 		resp.Body.Close()

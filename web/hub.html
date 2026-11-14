@@ -225,7 +225,7 @@ const EN = {
  "Vale per questa pagina, per il registro e per i messaggi dell'hub.":'Applies to this page, the log and the hub messages.',
  // dinamici
  'mai':'never','accesso richiesto':'login required','errore':'error','creata':'created','da creare':'not created',
- 'Nessun dispositivo: aggiungi il primo computer qui sotto.':'No devices: add the first computer below.','Revoca':'Revoke','Attivo':'Active','Inattivo':'Inactive',
+ 'Nessun dispositivo: aggiungi il primo computer qui sotto.':'No devices: add the first computer below.','Revoca':'Revoke','Attivo':'Active','Da aggiornare':'Needs update','versione < 0.2.2':'version < 0.2.2','Inattivo':'Inactive',
  'Revocare “{n}”? Non potrà più sincronizzare.':'Revoke “{n}”? It will no longer be able to sync.','Non configurato':'Not configured',
  'Il backup su Google Drive non è ancora configurato.':'The Google Drive backup is not configured yet.','Da autorizzare':'Needs authorization',
  "Credenziali salvate: manca l'autorizzazione dell'account Google.":'Credentials saved: the Google account authorization is missing.',
@@ -293,7 +293,12 @@ async function refresh(){
     tr.innerHTML = '<td></td><td></td><td style="text-align:right"><button class="danger small">'+t('Revoca')+'</button></td>';
     tr.children[0].textContent = d.name;
     if(d.pending){ tr.children[1].innerHTML = chip('info', t('In attesa di abbinamento')); }
-    else { tr.children[1].innerHTML = chip(recent?'ok':'wait', recent?t('Attivo'):t('Inattivo')) + ' '; tr.children[1].append(when(d.lastSeen)); }
+    else {
+      tr.children[1].innerHTML = chip(recent?'ok':'wait', recent?t('Attivo'):t('Inattivo')) + ' '; tr.children[1].append(when(d.lastSeen));
+      const v = document.createElement('span'); v.className = 'hint'; v.textContent = ' · ' + (d.version ? 'v' + d.version : t('versione < 0.2.2'));
+      tr.children[1].append(v);
+      if(d.outdated){ tr.children[1].insertAdjacentHTML('beforeend', ' ' + chip('ko', t('Da aggiornare'))); }
+    }
     tr.querySelector('button').onclick = async () => { if(confirm(t('Revocare “{n}”? Non potrà più sincronizzare.', {n:d.name}))){ await api('/admin/api/devices?id='+encodeURIComponent(d.id), {}, 'DELETE'); refresh(); } };
     tb.append(tr);
   }

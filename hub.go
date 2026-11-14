@@ -54,11 +54,16 @@ type Device struct {
 	TokenHash string    `json:"tokenHash"`
 	Created   time.Time `json:"created"`
 	LastSeen  time.Time `json:"lastSeen"`
+	Version   string    `json:"version,omitempty"` // versione di encluca dichiarata dal client
 	// abbinamento in attesa: il codice EL2 contiene una chiave monouso (qui solo l'hash) che il
 	// client scambia con il token definitivo. Finché TokenHash è vuoto il dispositivo non è attivo.
 	PairHash string    `json:"pairHash,omitempty"`
 	PairExp  time.Time `json:"pairExp,omitempty"`
 }
+
+// protoVersion è la versione del protocollo tra client e hub. La 2 (encluca 0.2.2) aggiunge
+// le voci cartella: l'hub rifiuta con 426 i client che non la dichiarano (X-Encluca-Proto).
+const protoVersion = 2
 
 // pairValidity è la durata di un codice di abbinamento non ancora usato.
 const pairValidity = 24 * time.Hour
@@ -256,6 +261,18 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 		if d == nil {
 			writeErr(w, http.StatusUnauthorized, T("dispositivo non autorizzato"))
 			return
+		}
+		if p, err := strconv.Atoi(r.Header.Get("X-Encluca-Proto")); err != nil || p < protoVersion {
+			writeErr(w, http.StatusUpgradeRequired, T("questo dispositivo usa una versione di encluca troppo vecchia per questo NAS: aggiornalo alla 0.2.2 o successiva"))
+			return
+		}
+		if v := r.Header.Get("X-Encluca-Version"); v != "" {
+			h.mu.Lock()
+			if d.Version != v {
+				d.Version = v
+				h.saveCfg()
+			}
+			h.mu.Unlock()
 		}
 		fn(w, r, d)
 	}
@@ -635,7 +652,8 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	devs := make([]map[string]any, 0, len(h.cfg.Devices))
 	for _, d := range h.cfg.Devices {
-		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == ""})
+		outdated := d.TokenHash != "" && (d.Version == "" || newerVersion("0.2.2", d.Version))
+		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == "", "version": d.Version, "outdated": outdated})
 	}
 	seq := h.idx.Seq
 	browse := h.cfg.BrowseEnabled
