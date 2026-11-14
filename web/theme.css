@@ -10,7 +10,7 @@
 *{box-sizing:border-box}
 html{scroll-padding-top:calc(var(--top) + 16px)}
 body{margin:0;background:var(--bg1);color:var(--fg2);font:14px/1.5 Inter,Roboto,"Segoe UI",system-ui,-apple-system,Ubuntu,sans-serif}
-a{color:var(--primary)} a:hover{color:var(--primary-h)}
+a{color:var(--link,var(--primary))} a:hover{color:var(--link-h,var(--primary-h))}
 code{background:var(--alt1);padding:1px 6px;border-radius:var(--r);font:12.5px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;word-break:break-all}
 .hidden{display:none!important}
 
@@ -152,3 +152,15 @@ button.linkbtn:hover{background:none;text-decoration:underline}
 .pwmeter[data-level="4"] .pwbar i{background:var(--green)}
 .pwmeter .pwlabel{font-size:12.5px;color:var(--mute);min-height:1.4em;display:block;margin-top:2px}
 .pwmeter[data-level="0"]{visibility:hidden}
+
+/* Ruolo della pagina: l'hub (NAS) deve distinguersi a colpo d'occhio dal client (questo PC).
+   Hub: accento viola, barra superiore scura-viola con filo inferiore, etichetta "NAS · hub".
+   Client: accento azzurro predefinito, etichetta "questo PC". */
+body.hub{--primary:#7E57C2;--primary-h:#9575CD;--link:#B39DDB;--link-h:#D1C4E9;--topbar:#1A1424}
+body.hub .topbar{box-shadow:inset 0 -3px 0 var(--primary)}
+body.hub .login{background:radial-gradient(circle at 50% 30%,#2E2540,#140F1C 70%)}
+body.hub .login .card{box-shadow:inset 0 4px 0 var(--primary),0 1px 3px rgba(0,0,0,.5)}
+.role{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;line-height:1;border-radius:12px;padding:5px 10px;letter-spacing:.02em;white-space:nowrap}
+.role svg{width:14px;height:14px;flex:none}
+.role.hub{background:var(--primary);color:#fff}
+.role.pc{background:rgba(0,149,213,.16);color:var(--primary)}

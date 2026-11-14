@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="{{LOGO}}">
 <meta name="encluca-token" content="{{TOKEN}}">
-<title>encluca</title>
+<title>encluca · questo PC</title>
 <style>
 /*THEME*/
 .door .card-body{display:grid;grid-template-columns:96px 1fr;gap:24px;align-items:center}
@@ -32,7 +32,7 @@ ul.alerts li:last-child{border-bottom:0}
 <body>
 
 <header class="topbar">
-  <a class="brand" href="#door"><img class="mark" src="{{LOGO}}" alt="">encluca</a>
+  <a class="brand" href="#door"><img class="mark" src="{{LOGO}}" alt="">encluca</a> <span class="role pc"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-6v2h3v2H7v-2h3v-2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 2v9h16V6z"/></svg>questo PC</span>
   <span class="spacer"></span>
   <span class="meta" id="device"></span>
 </header>
@@ -149,6 +149,7 @@ ul.alerts li:last-child{border-bottom:0}
 const $ = id => document.getElementById(id);
 /*I18N*/
 const EN = {
+ 'encluca · questo PC':'encluca · this PC','questo PC':'this PC',
  // statici
  'Cassaforte aperta: i file sono in chiaro in':'Vault open: files are in plaintext in','Sezioni':'Sections','Cassaforte':'Vault','Sincronizzazione':'Sync',
  'Impostazioni':'Settings','Registro':'Log','encluca › Questo computer':'encluca › This computer','Collega questo computer al NAS':'Pair this computer with the NAS',
