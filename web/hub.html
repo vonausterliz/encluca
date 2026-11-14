@@ -377,8 +377,9 @@ function buildTree(list){
     const name = enclucaVault.name(it.p);
     if(name === null){ bad++; continue; }
     const parts = name.split('/'); let d = root;
-    for(const part of parts.slice(0, -1)) d = d.dirs[part] || (d.dirs[part] = {dirs: {}, files: []});
-    d.files.push({name: parts[parts.length-1], size: it.size, mtime: it.mtime, p: it.p});
+    // una cartella vuota (it.dir) è solo un nodo cartella, senza file
+    for(const part of (it.dir ? parts : parts.slice(0, -1))) d = d.dirs[part] || (d.dirs[part] = {dirs: {}, files: []});
+    if(!it.dir) d.files.push({name: parts[parts.length-1], size: it.size, mtime: it.mtime, p: it.p});
   }
   root.bad = bad;
   return root;

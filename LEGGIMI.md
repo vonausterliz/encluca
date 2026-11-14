@@ -20,7 +20,7 @@ tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo program
 
 1. Apri **Encluca** (icona sul desktop o http://127.0.0.1:8484).
 2. Inserisci la password e premi **Apri**: compare la cartella `Encluca - APERTA` nella tua home. La fascia diventa gialla, a indicare che i file sono in chiaro.
-3. Lavora sui file normalmente. Ogni modifica viene cifrata e inviata entro circa 2 secondi.
+3. Lavora sui file normalmente. Ogni modifica viene cifrata e inviata entro circa 2 secondi. Anche le **cartelle vuote** vengono sincronizzate e salvate nel backup su Drive.
 4. Quando hai finito premi **Chiudi la cassaforte**: le ultime modifiche vengono cifrate e la cartella in chiaro viene cancellata.
 
 Se spegni o riavvii il PC con la cassaforte aperta, su Linux e macOS il servizio la chiude da solo. Su Windows, al riavvio, l'app ti mostra "Cassaforte rimasta aperta": inserisci la password per riprendere e poi chiudi.
@@ -104,6 +104,7 @@ L'API di Google Drive è gratuita e non richiede la fatturazione. L'unico limite
 
 - **Computer:** dalla 0.2.0 il client si aggiorna da solo. Controlla le nuove versioni all'avvio e poi ogni 6 ore, e installa **solo rilasci firmati** (firma ed25519 verificata con la chiave incorporata nel programma), mai versioni più vecchie, e **solo a cassaforte chiusa**. Dopo l'installazione il servizio si riavvia da solo. Puoi disattivarlo in *Impostazioni → Aggiornamenti automatici*.
 - **La prima 0.2.0 va installata a mano** su ogni computer, come le versioni precedenti: i client 0.1.x non sanno aggiornarsi.
+- **Dalla 0.2.2 il NAS accetta solo computer con encluca 0.2.2 o successivo.** I computer con la 0.2.x si aggiornano da soli; quelli con la 0.1.x vanno reinstallati a mano. Nella pagina *Dispositivi* del NAS ogni computer mostra la sua versione, e quelli da aggiornare hanno l'etichetta "Da aggiornare".
 - **NAS:** l'hub non si aggiorna da solo. Quando c'è una versione nuova, la sua pagina lo segnala. Per aggiornare: TrueNAS → Apps → encluca → **Stop**, poi **Start**.
 
 ## ⚠️ La password
@@ -124,9 +125,8 @@ Mentre la cassaforte è aperta, i programmi che usi (Office, anteprime, indicizz
 
 Il NAS conosce soltanto: numero e dimensione dei file, date di modifica e struttura delle cartelle (con i nomi cifrati).
 
-## Limiti di questa versione (0.1.x)
+## Limiti di questa versione
 
-- **Cartelle vuote** non vengono sincronizzate: si sincronizzano solo i file.
 - **Nomi molto lunghi.** Un nome di file o cartella oltre circa 140 byte (le lettere accentate e simboli come `’` contano 2-3 byte) non può essere cifrato: l'app lo segnala negli avvisi e non chiude la cassaforte finché non lo rinomini, così il file non va perso.
 - **Un solo NAS.** I PC non si sincronizzano direttamente tra loro, ma passano sempre dal NAS.
 - **Apertura.** All'apertura vengono decifrati tutti i file: con molti GB servono alcuni secondi o minuti.
