@@ -18,7 +18,7 @@ tramite il NAS, con backup cifrato e versionato su Google Drive. Un solo program
 
 ## Come si usa ogni giorno
 
-1. Apri **Encluca** (icona sul desktop o http://127.0.0.1:8484).
+1. Apri **Encluca** (icona sul desktop o http://127.0.0.1:8484). La prima volta in un browser (e poi ogni 90 giorni) vedi per un attimo il messaggio "si apre solo dal tuo utente" e l'interfaccia compare in una nuova scheda: serve a impedire che un altro utente dello stesso computer comandi la tua cassaforte.
 2. Inserisci la password e premi **Apri**: compare la cartella `Encluca - APERTA` nella tua home. La fascia diventa gialla, a indicare che i file sono in chiaro.
 3. Lavora sui file normalmente. Ogni modifica viene cifrata e inviata entro circa 2 secondi. Anche le **cartelle vuote** vengono sincronizzate e salvate nel backup su Drive.
 4. Quando hai finito premi **Chiudi la cassaforte**: le ultime modifiche vengono cifrate e la cartella in chiaro viene cancellata.

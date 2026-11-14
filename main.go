@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-var Version = "0.2.3"
+var Version = "0.2.4"
 
 //go:embed web/*.html web/*.css web/*.js web/*.wasm
 var webFS embed.FS
@@ -254,10 +254,12 @@ func (c *Client) uiHandler(uiAddr string) http.Handler { return c.uiHandlerToken
 
 // uiHandlerToken serve interfaccia e API locale.
 // uiToken è il segreto della sessione: è scritto solo nella pagina servita a chi apre
-// http://127.0.0.1:8484 (e in cli-token.json, 0600, per i comandi da terminale) e ogni chiamata
+// http://127.0.0.1:8484 CON LA SESSIONE DELL'UTENTE (vedi uiaccess.go; e in cli-token.json,
+// 0600, per i comandi da terminale) e ogni chiamata
 // /api/ lo deve rimandare. Un sito web aperto nel browser non può leggere la pagina (stessa
 // origine), quindi non può comandare il client neppure se trovasse un modo di aggirare gli altri controlli.
 func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
+	access := newUIAccess(c.dir, uiAddr, c.log.Printf)
 	_, port, _ := net.SplitHostPort(uiAddr)
 	allowedHosts := map[string]bool{"127.0.0.1:" + port: true, "localhost:" + port: true, "[::1]:" + port: true}
 	mux := http.NewServeMux()
@@ -303,11 +305,38 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	mux.HandleFunc("/api/workdir", post(func(r *http.Request) (any, error) { return nil, c.SetWorkDir(parse(r).Dir) }))
 	mux.HandleFunc("/api/autoupdate", post(func(r *http.Request) (any, error) { return nil, c.SetAutoUpdate(parse(r).On) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
+	// sblocco: fa aprire l'interfaccia nel browser dell'utente del servizio (vedi uiaccess.go)
+	mux.HandleFunc("/unlock", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.Header.Get("X-Encluca") != "1" {
+			writeErr(w, http.StatusForbidden, T("richiesta non valida"))
+			return
+		}
+		if err := access.unlock(); err != nil {
+			c.log.Printf(T("Apertura dell'interfaccia nel browser non riuscita: %v"), err)
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
 			return
 		}
+		if tk := r.URL.Query().Get("ticket"); tk != "" {
+			if access.redeem(tk) {
+				access.serveEntered(w)
+				return
+			}
+			access.serveLocked(w)
+			return
+		}
+		// la pagina contiene il token: solo per chi ha la sessione dell'utente del servizio
+		if !access.hasSession(r) {
+			access.serveLocked(w)
+			return
+		}
+		access.setSession(w) // rinnova la scadenza
 		serveUI(w, "web/client.html", "{{TOKEN}}", uiToken)
 	})
 	// protezione da DNS rebinding: si accettano solo richieste indirizzate a localhost

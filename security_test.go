@@ -263,7 +263,18 @@ func TestClientUIToken(t *testing.T) {
 	if code, _ := do("POST", "/api/close", "sbagliato"); code != http.StatusForbidden {
 		t.Fatalf("comando con token errato: %d", code)
 	}
-	_, page := do("GET", "/", "")
+	// la pagina con il token si ottiene solo con la sessione dell'utente (vedi uiaccess_test.go)
+	req, _ := http.NewRequest("GET", srv.URL+"/", nil)
+	req.Host = "127.0.0.1:8484"
+	req.AddCookie(&http.Cookie{Name: "el_ui", Value: loadUICookie(c.dir)})
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var pb bytes.Buffer
+	pb.ReadFrom(resp.Body)
+	resp.Body.Close()
+	page := pb.String()
 	m := regexp.MustCompile(`name="encluca-token" content="([0-9a-f]{64})"`).FindStringSubmatch(page)
 	if m == nil {
 		t.Fatal("token non presente nella pagina")
