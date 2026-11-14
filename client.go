@@ -126,6 +126,11 @@ type Client struct {
 
 	hubProtoOK bool // l'ultima risposta del NAS dichiarava il protocollo 2: si può scrivere
 
+	// dischi che non distinguono maiuscole e minuscole (macOS, Windows): vedi casefold.go
+	caseFold bool
+	fold     map[string]string // nome in minuscolo -> voce presente nella cartella aperta
+	clash    map[string]string // voce non mostrata qui perché coincide con un'altra -> nome
+
 	upd      *updater      // nil se l'aggiornamento automatico non è disponibile
 	updating bool          // installazione in corso: la cassaforte non si apre
 	restart  chan struct{} // segnala a runClient di riavviare il servizio
@@ -141,7 +146,7 @@ func (c *Client) mirrorPath(enc string) string {
 }
 
 func newClient(dir string) (*Client, error) {
-	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), restart: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}, renames: map[string]string{}}
+	c := &Client{dir: dir, wake: make(chan struct{}, 1), pullReset: make(chan struct{}, 1), restart: make(chan struct{}, 1), problems: map[string]string{}, encCache: map[string]string{}, conflicts: []string{}, renames: map[string]string{}, fold: map[string]string{}, clash: map[string]string{}}
 	for _, d := range []string{dir, c.mirrorDir(), c.tmpDir()} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			return nil, err
@@ -521,6 +526,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 		}
 		delete(c.problems, rel)
 		seen[enc] = true
+		c.noteLocalNameLocked(enc, rel)
 		info, err := d.Info()
 		if err != nil {
 			return nil
@@ -567,6 +573,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 			continue
 		}
 		seen[enc] = true
+		c.noteLocalNameLocked(enc, rel)
 		st := c.st.Files[enc]
 		if st != nil && st.Dir && !st.Del {
 			if st.Plain == nil {
@@ -640,6 +647,7 @@ func (c *Client) scanLocked(strict bool) (changed bool, err error) {
 			changed = true
 		}
 	}
+	c.retryClashesLocked()
 	if strict && firstErr != nil {
 		return changed, firstErr
 	}
@@ -652,6 +660,9 @@ func (c *Client) decryptToWorkLocked(enc string, st *fstate) error {
 	rel, err := c.plainRelLocked(enc)
 	if err != nil {
 		return fmt.Errorf(T("nome non decifrabile: %w"), err)
+	}
+	if c.caseClashLocked(enc, rel) {
+		return errCaseClash
 	}
 	src, err := os.Open(c.mirrorPath(enc))
 	if err != nil {
@@ -733,7 +744,7 @@ func (c *Client) applyDirLocked(e *Entry, st *fstate) {
 		if fi, err := os.Lstat(full); err == nil && !fi.IsDir() {
 			os.Remove(full) // il file con questo nome è stato sostituito altrove da una cartella
 		}
-		if os.MkdirAll(full, 0o700) == nil {
+		if !c.caseClashLocked(e.Path, rel) && os.MkdirAll(full, 0o700) == nil {
 			ns.Plain = &plainSnap{}
 			c.log.Printf(T("Nuova cartella da un altro dispositivo: %s"), rel)
 		}
@@ -975,7 +986,9 @@ func (c *Client) syncEntry(ctx context.Context, e *Entry) error {
 	nst := &fstate{Rev: rev, SHA: sum, Size: n, MTime: e.MTime}
 	c.st.Files[e.Path] = nst
 	if c.st.Open && c.cip != nil {
-		if err := c.decryptToWorkLocked(e.Path, nst); err != nil {
+		if err := c.decryptToWorkLocked(e.Path, nst); errors.Is(err, errCaseClash) {
+			// già segnalato: la voce resta cifrata e compare quando l'altra viene rinominata
+		} else if err != nil {
 			c.log.Printf(T("ERRORE decifratura %s: %v"), e.Path, err)
 		} else if rel, err := c.plainRelLocked(e.Path); err == nil {
 			c.log.Printf(T("Aggiornato da un altro dispositivo: %s"), rel)
@@ -1652,17 +1665,32 @@ func (c *Client) Open(password string) error {
 	}
 	c.cip = cip
 	c.encCache = map[string]string{}
+	c.caseFold = caseFoldProbe(work)
+	c.fold, c.clash = map[string]string{}, map[string]string{}
 	c.busy = "apertura"
 	defer func() { c.busy = "" }()
 	os.WriteFile(filepath.Join(work, readmeName), []byte(readmeText), 0o600)
 	markFolder(work)
 	var failed int
-	for enc, st := range c.st.Files {
-		if st.Del || (recovering && st.Plain != nil) {
+	// ordine fisso: se due nomi coincidono a parte le maiuscole, viene mostrato sempre lo stesso
+	encs := make([]string, 0, len(c.st.Files))
+	for enc := range c.st.Files {
+		encs = append(encs, enc)
+	}
+	sort.Strings(encs)
+	for _, enc := range encs {
+		st := c.st.Files[enc]
+		if st.Del {
+			continue
+		}
+		if recovering && st.Plain != nil {
+			if rel, err := c.plainRelLocked(enc); err == nil {
+				c.noteLocalNameLocked(enc, rel)
+			}
 			continue
 		}
 		if st.Dir {
-			if rel, err := c.plainRelLocked(enc); err == nil && os.MkdirAll(filepath.Join(work, filepath.FromSlash(rel)), 0o700) == nil {
+			if rel, err := c.plainRelLocked(enc); err == nil && !c.caseClashLocked(enc, rel) && os.MkdirAll(filepath.Join(work, filepath.FromSlash(rel)), 0o700) == nil {
 				st.Plain = &plainSnap{}
 			}
 			continue
@@ -1670,7 +1698,7 @@ func (c *Client) Open(password string) error {
 		if _, err := os.Stat(c.mirrorPath(enc)); err != nil {
 			continue
 		}
-		if err := c.decryptToWorkLocked(enc, st); err != nil {
+		if err := c.decryptToWorkLocked(enc, st); err != nil && !errors.Is(err, errCaseClash) {
 			failed++
 			c.log.Printf(T("ERRORE decifratura di un file: %v"), err)
 		}
@@ -1802,6 +1830,9 @@ func (c *Client) Status() map[string]any {
 			continue // mostrato tra i nomi da rinominare, con il suggerimento
 		}
 		probs = append(probs, k+": "+v)
+	}
+	for _, rel := range c.clash {
+		probs = append(probs, rel+": "+T("su questo computer esiste già un elemento con lo stesso nome a parte le maiuscole. È al sicuro nella cassaforte ma qui non è visibile: rinomina quello visibile e comparirà anche questo"))
 	}
 	sort.Strings(probs)
 	type renameItem struct {
