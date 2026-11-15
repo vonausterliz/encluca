@@ -173,6 +173,8 @@ var enMessages = map[string]string{
 	"Ripristino a %s: %d file riportati alla versione precedente, %d file eliminati recuperati":                                "Restore to %s: %d files returned to the previous version, %d deleted files recovered",
 	"versione non trovata":                            "version not found",
 	"Ripristinata una versione precedente di un file": "A previous version of a file was restored",
+	"file della CA illeggibili":                       "CA files are unreadable",
+	"ERRORE creazione del certificato del server: %v": "ERROR creating the server certificate: %v",
 	"dispositivo non autorizzato":                     "device not authorized",
 	"cassaforte non ancora creata":                    "vault not created yet",
 	"metadati non validi":                             "invalid metadata",

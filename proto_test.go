@@ -81,8 +81,7 @@ func TestClientShowsUpgradeError(t *testing.T) {
 		}
 		inner.ServeHTTP(w, r)
 	}))
-	old.TLS = &tls.Config{Certificates: []tls.Certificate{env.hub.cert}}
-	old.StartTLS()
+	startHubTLS(old, env.hub)
 	defer old.Close()
 	env.srv.Close()
 	env.srv = old
@@ -128,8 +127,7 @@ func TestClientRefusesOldHub(t *testing.T) {
 		w.WriteHeader(rec.Code)
 		w.Write(rec.Body.Bytes())
 	}))
-	srv.TLS = &tls.Config{Certificates: []tls.Certificate{env.hub.cert}}
-	srv.StartTLS()
+	startHubTLS(srv, env.hub)
 	defer srv.Close()
 	env.srv.Close()
 	env.srv = srv

@@ -81,6 +81,8 @@ type hubConfig struct {
 	Lang      string       `json:"lang,omitempty"` // "it" | "en"
 	// BrowseEnabled consente di sfogliare la cassaforte dalla pagina del NAS (decifratura nel browser)
 	BrowseEnabled bool `json:"browseEnabled,omitempty"`
+	// CA: certificato del server firmato dalla CA locale (vedi ca.go)
+	CA CAConfig `json:"ca"`
 	// Versions: quante versioni precedenti conservare (nil = predefiniti, vedi versions.go)
 	Versions *VersionsConfig `json:"versions,omitempty"`
 }
@@ -94,15 +96,21 @@ type Hub struct {
 	notify      chan struct{}
 	sessions    map[string]time.Time
 	fingerprint string
-	cert        tls.Certificate
-	log         *ringLog
-	gd          *GDrive
-	limiter     *ipLimiter
-	scryptSem   chan struct{}
-	trash       []trashItem
-	versions    []versionItem
-	latest      string // ultima versione pubblicata (solo per l'avviso: l'hub non si aggiorna da solo)
-	latestFail  bool   // errore del controllo già registrato
+	// CA locale e certificato del server firmato da lei (vedi ca.go)
+	caCert        *x509.Certificate
+	caKey         *ecdsa.PrivateKey
+	caFingerprint string
+	leaf          *tls.Certificate
+	leafValidity  time.Duration // 0 = un anno (cambia solo nei test)
+	cert          tls.Certificate
+	log           *ringLog
+	gd            *GDrive
+	limiter       *ipLimiter
+	scryptSem     chan struct{}
+	trash         []trashItem
+	versions      []versionItem
+	latest        string // ultima versione pubblicata (solo per l'avviso: l'hub non si aggiorna da solo)
+	latestFail    bool   // errore del controllo già registrato
 }
 
 func (h *Hub) vaultDir() string  { return filepath.Join(h.dir, "vault") }
@@ -154,6 +162,9 @@ func newHub(dir, listen string) (*Hub, error) {
 		h.idx.Entries = map[string]*Entry{}
 	}
 	if err := h.loadOrCreateCert(); err != nil {
+		return nil, err
+	}
+	if err := h.loadOrCreateCA(); err != nil {
 		return nil, err
 	}
 	h.loadTrash()
@@ -283,6 +294,7 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 			writeErr(w, http.StatusUpgradeRequired, T("questo dispositivo usa una versione di encluca troppo vecchia per questo NAS: aggiornalo alla 0.2.2 o successiva"))
 			return
 		}
+		h.learnHost(r)
 		// solo versioni ben formate finiscono nella configurazione e nella pagina dei dispositivi
 		if v := strings.TrimPrefix(r.Header.Get("X-Encluca-Version"), "v"); v != "" && validVersion(v) {
 			h.mu.Lock()
@@ -641,6 +653,15 @@ func (h *Hub) putDir(w http.ResponseWriter, p, full string, base, mtime int64, d
 	writeJSON(w, http.StatusOK, &c)
 }
 
+// learnHost ricorda l'indirizzo con cui una richiesta AUTENTICATA ha raggiunto l'hub: finirà
+// nel certificato del server. Si usa l'intestazione Host e non l'indirizzo della connessione,
+// perché in Docker l'hub vede solo l'indirizzo del contenitore.
+func (h *Hub) learnHost(r *http.Request) {
+	h.mu.Lock()
+	h.addHostLocked(r.Host)
+	h.mu.Unlock()
+}
+
 func validVersion(v string) bool { _, ok := parseVersion(v); return ok }
 
 // hasLiveDirLocked dice se enc è una voce cartella non cancellata.
@@ -676,6 +697,7 @@ func (h *Hub) withAdmin(fn http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, http.StatusUnauthorized, T("accesso richiesto"))
 			return
 		}
+		h.learnHost(r)
 		fn(w, r)
 	}
 }
@@ -743,13 +765,15 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	browse := h.cfg.BrowseEnabled
 	trash := h.trashStatsLocked()
 	vers := h.versionsStatsLocked()
+	caSt := h.caStatusLocked()
+	servedFp := h.servedFingerprintLocked()
 	latest := h.latest
 	h.mu.Unlock()
 	_, metaErr := os.Stat(h.metaPath())
 	_, pwFileErr := os.Stat(filepath.Join(h.dir, "admin-password.txt"))
 	res := map[string]any{
 		"version": Version, "files": files, "bytes": size, "seq": seq,
-		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": h.fingerprint, "browseEnabled": browse,
+		"vaultCreated": metaErr == nil, "devices": devs, "fingerprint": servedFp, "ca": caSt, "browseEnabled": browse,
 		"defaultPassword": pwFileErr == nil, "lang": getLang(),
 		"gdrive": h.gd.status(), "trash": trash, "versions": vers, "log": h.log.Lines(),
 	}
@@ -938,7 +962,7 @@ func (h *Hub) run(ctx context.Context) error {
 	srv := &http.Server{
 		Addr:              h.listen,
 		Handler:           h.handler(),
-		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{h.cert}, MinVersion: tls.VersionTLS12},
+		TLSConfig:         h.tlsConfig(),
 		ReadHeaderTimeout: 20 * time.Second,
 	}
 	gdDone := make(chan struct{})

@@ -47,8 +47,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		}
 		inner.ServeHTTP(w, r)
 	}))
-	env.srv.TLS = &tls.Config{Certificates: []tls.Certificate{h.cert}}
-	env.srv.StartTLS()
+	startHubTLS(env.srv, h)
 	env.ctx, env.cancel = context.WithCancel(context.Background())
 	t.Cleanup(func() { env.cancel(); env.srv.Close() })
 	return env
@@ -346,4 +345,13 @@ func TestOwnDeleteEchoAndSyncNow(t *testing.T) {
 		t.Fatalf("SyncNow con NAS spento risulta online: %v", r)
 	}
 	env.down.Store(false)
+}
+
+// startHubTLS avvia srv in HTTPS con la configurazione TLS vera dell'hub. httptest.StartTLS
+// non va bene: aggiunge un proprio certificato fisso, che Go preferisce alla scelta dinamica
+// dell'hub (GetCertificate) quando ci si collega a un indirizzo IP.
+func startHubTLS(srv *httptest.Server, h *Hub) {
+	srv.Listener = tls.NewListener(srv.Listener, h.tlsConfig())
+	srv.Start()
+	srv.URL = "https://" + srv.Listener.Addr().String()
 }
