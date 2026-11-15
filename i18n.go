@@ -255,6 +255,8 @@ var enMessages = map[string]string{
 	"l'aggiornamento pronto (%s) non è più nuovo della versione installata (%s): scartato":               "the ready update (%s) is not newer than the installed version (%s): discarded",
 	"Installo l'aggiornamento %s e riavvio il servizio":                                                  "Installing update %s and restarting the service",
 	"Installazione dell'aggiornamento non riuscita: %v":                                                  "Update installation failed: %v",
+	"download fermo da più di %v: connessione interrotta":                                                "download stalled for more than %v: connection dropped",
+	"L'aggiornamento preparato non è più pubblicato: lo scarto":                                          "The prepared update is no longer published: discarding it",
 	"Controllo degli aggiornamenti non riuscito: %v":                                                     "Update check failed: %v",
 	"aggiornamento in corso: riprova tra qualche secondo":                                                "update in progress: try again in a few seconds",
 	"Aggiornamento installato: %s → %s":                                                                  "Update installed: %s → %s",

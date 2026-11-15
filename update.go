@@ -228,7 +228,49 @@ type updater struct {
 	stagedPath string
 }
 
-func newUpdateHTTPClient() *http.Client { return &http.Client{Timeout: 5 * time.Minute} }
+// Nessun limite di durata totale: una connessione lenta ma attiva deve poter finire. Si
+// interrompe invece una richiesta che resta ferma (nessun dato) per updateStallTimeout, e
+// comunque dopo updateMaxDuration.
+var (
+	updateStallTimeout = 60 * time.Second
+	updateMaxDuration  = time.Hour
+)
+
+func newUpdateHTTPClient() *http.Client {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.ResponseHeaderTimeout = 60 * time.Second
+	return &http.Client{Transport: tr}
+}
+
+// stallBody interrompe la lettura se non arrivano dati per updateStallTimeout.
+type stallBody struct {
+	io.ReadCloser
+	ctx    context.Context
+	timer  *time.Timer
+	cancel context.CancelCauseFunc
+	stop   context.CancelFunc
+}
+
+func (b *stallBody) Read(p []byte) (int, error) {
+	n, err := b.ReadCloser.Read(p)
+	if n > 0 {
+		b.timer.Reset(updateStallTimeout)
+	}
+	if err != nil && err != io.EOF {
+		if c := context.Cause(b.ctx); c != nil && c != context.Canceled {
+			err = c
+		}
+	}
+	return n, err
+}
+
+func (b *stallBody) Close() error {
+	b.timer.Stop()
+	err := b.ReadCloser.Close()
+	b.cancel(nil)
+	b.stop()
+	return err
+}
 
 func newUpdater(dataDir, current string, logf func(string, ...any)) (*updater, error) {
 	pk, err := hex.DecodeString(releasePubKeyHex)
@@ -265,20 +307,37 @@ func (u *updater) state() updateState {
 	return u.st
 }
 
+// httpGet fa una GET che si interrompe se resta ferma (vedi updateStallTimeout); il corpo
+// della risposta va chiuso.
 func httpGet(ctx context.Context, hc *http.Client, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
+	tctx, stop := context.WithTimeout(ctx, updateMaxDuration)
+	sctx, cancel := context.WithCancelCause(tctx)
+	errStall := fmt.Errorf(T("download fermo da più di %v: connessione interrotta"), updateStallTimeout)
+	timer := time.AfterFunc(updateStallTimeout, func() { cancel(errStall) })
+	fail := func(err error) (*http.Response, error) {
+		timer.Stop()
+		if c := context.Cause(sctx); c != nil && c != context.Canceled && ctx.Err() == nil {
+			err = c
+		}
+		cancel(nil)
+		stop()
 		return nil, err
+	}
+	req, err := http.NewRequestWithContext(sctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fail(err)
 	}
 	req.Header.Set("User-Agent", "encluca/"+Version)
 	resp, err := hc.Do(req)
 	if err != nil {
-		return nil, err
+		return fail(err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return nil, fmt.Errorf("%s: HTTP %d", url, resp.StatusCode)
+		return fail(fmt.Errorf("%s: HTTP %d", url, resp.StatusCode))
 	}
+	timer.Reset(updateStallTimeout)
+	resp.Body = &stallBody{ReadCloser: resp.Body, ctx: sctx, timer: timer, cancel: cancel, stop: stop}
 	return resp, nil
 }
 
@@ -387,12 +446,16 @@ func (u *updater) check(ctx context.Context) error {
 	if err != nil {
 		u.st.Error = err.Error()
 	} else {
+		// v è l'ultima versione pubblicata se più nuova, altrimenti "": se una release è
+		// stata ritirata l'avviso sparisce. Dopo un errore resta quanto si sapeva prima.
 		u.st.Error = ""
-		if v != "" {
-			u.st.Available = v
-		}
+		u.st.Available = v
 	}
 	u.mu.Unlock()
+	if err == nil && v == "" && u.state().Staged != "" {
+		u.logf(T("L'aggiornamento preparato non è più pubblicato: lo scarto"))
+		u.discardStaged()
+	}
 	return err
 }
 

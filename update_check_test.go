@@ -265,3 +265,39 @@ func assertNoLeftovers(t *testing.T, u *updater) {
 		t.Fatalf("file rimasti in %s: %v", u.dir, names)
 	}
 }
+
+// Se la release più nuova viene ritirata, l'avviso e il pacchetto pronto spariscono.
+func TestCheckClearsWithdrawnRelease(t *testing.T) {
+	u, f, priv := newTestUpdater(t, "0.2.0")
+	f.release(t, priv, "v0.2.1", "0.2.1", "0.2.1")
+	if err := u.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	staged := u.stagedPath
+	f.release(t, priv, "v0.2.0", "0.2.0", "0.2.0")
+	if err := u.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if st := u.state(); st.Available != "" || st.Staged != "" {
+		t.Fatalf("stato dopo il ritiro: %+v", st)
+	}
+	if _, err := os.Stat(staged); err == nil {
+		t.Fatal("pacchetto ritirato non cancellato")
+	}
+}
+
+// Un errore durante il controllo non cancella quello che si sapeva già.
+func TestCheckErrorKeepsAvailable(t *testing.T) {
+	u, f, priv := newTestUpdater(t, "0.2.0")
+	f.release(t, priv, "v0.2.1", "0.2.1", "0.2.1")
+	if err := u.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	f.srv.Close()
+	if err := u.check(t.Context()); err == nil {
+		t.Fatal("nessun errore con il server spento")
+	}
+	if st := u.state(); st.Available != "0.2.1" || st.Staged != "0.2.1" || st.Error == "" {
+		t.Fatalf("stato dopo l'errore: %+v", st)
+	}
+}
