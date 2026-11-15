@@ -38,6 +38,7 @@
       <a href="#panoramica"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3zm0 8h8v-6H3zm10 0h8V11h-8zm0-18v6h8V3z"/></svg>Panoramica</a>
       <a href="#file"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8z"/></svg>File</a>
       <a href="#dispositivi"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16v10H4zm-2 12h20v-1H2zM4 4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/></svg>Dispositivi</a>
+      <a href="#certificato"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5zm-2 16-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/></svg>Certificato</a>
       <a href="#cestino"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6l1 2h4v2H4V5h4zM6 9h12l-1 12H7z"/></svg>Cestino</a>
       <a href="#ripristino"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 3a9 9 0 0 0-9 9H1l3.9 3.9L9 12H6a7 7 0 1 1 2.05 4.95l-1.42 1.42A9 9 0 1 0 13 3zm-1 5v5l4.25 2.52.77-1.28-3.52-2.09V8z"/></svg>Ripristino</a>
       <a href="#drive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.35 10.04A7.5 7.5 0 0 0 5.35 8.04 6 6 0 0 0 6 20h13a5 5 0 0 0 .35-9.96"/></svg>Backup Google Drive</a>
@@ -122,6 +123,36 @@
             <span class="code" id="codeText"></span>
             <button class="ghost" id="copyBtn">Copia codice</button>
           </div>
+        </div>
+      </div>
+
+      <div class="card" id="certificato">
+        <div class="card-header"><h2>Certificato del NAS</h2><span class="chip" id="caChip">–</span></div>
+        <div class="card-body">
+          <p>Quando apri questa pagina il browser mostra un avviso, perché il certificato del NAS non è firmato da un'autorità che il browser conosce. Per toglierlo: importa una volta nel browser il certificato qui sotto, poi attiva il nuovo certificato. I computer con encluca continuano a funzionare, senza riabbinarli.</p>
+          <h3 style="font-size:15px;font-weight:500;color:var(--fg1);margin:20px 0 6px">1. Scarica e importa il certificato</h3>
+          <div class="row"><button id="caDl" class="primary">Scarica encluca-ca.crt</button></div>
+          <p class="hint">Impronta del certificato, per controllare di aver importato quello giusto:</p>
+          <p><code id="caFp" data-noi18n></code></p>
+          <details><summary>Chrome o Edge su Linux</summary><p class="hint">Impostazioni → Privacy e sicurezza → Sicurezza → Gestisci certificati → Autorità → Importa. Scegli il file e spunta "Considera attendibile per identificare siti web".</p></details>
+          <details><summary>Firefox</summary><p class="hint">Impostazioni → Privacy e sicurezza → Certificati → Mostra certificati → Autorità → Importa. Spunta "Considera attendibile per identificare siti web".</p></details>
+          <details><summary>Windows (Chrome ed Edge)</summary><p class="hint">Doppio clic sul file → Installa certificato → Utente corrente → Colloca tutti i certificati nel seguente archivio → Autorità di certificazione radice attendibili.</p></details>
+          <details><summary>macOS (Safari e Chrome)</summary><p class="hint">Doppio clic sul file: si apre Accesso Portachiavi. Apri il certificato "encluca-ca", espandi "Attendibilità" e scegli "Fidati sempre".</p></details>
+          <details><summary>iPhone e iPad</summary><p class="hint">Apri il file, poi Impostazioni → Profilo scaricato → Installa. Poi Impostazioni → Generali → Info → Attendibilità certificati e attiva "encluca-ca".</p></details>
+          <details><summary>Android</summary><p class="hint">Impostazioni → Sicurezza → Altre impostazioni di sicurezza → Installa da memoria → Certificato CA, e scegli il file.</p></details>
+          <h3 style="font-size:15px;font-weight:500;color:var(--fg1);margin:20px 0 6px">2. Indirizzi del NAS</h3>
+          <p class="hint">Gli indirizzi con cui raggiungi il NAS, uno per riga: finiscono nel certificato. Quelli con cui apri questa pagina e quelli usati dai computer vengono aggiunti da soli. Sono ammessi indirizzi IP di rete privata e nomi che finiscono per .local, .lan, .home, .internal, .home.arpa, .localdomain o .fritz.box.</p>
+          <textarea id="caHosts" rows="4" spellcheck="false"></textarea>
+          <div class="row" style="margin-top:8px"><button id="caHostsSave" class="primary small">Salva indirizzi</button></div>
+          <div class="msg" id="caHostsMsg"></div>
+          <h3 style="font-size:15px;font-weight:500;color:var(--fg1);margin:20px 0 6px">3. Attiva</h3>
+          <p id="caReady" data-noi18n></p>
+          <p class="hint">Un computer è pronto quando ha encluca 0.2.6 o successivo e si è collegato al NAS almeno una volta dopo l'aggiornamento. Se attivi prima, quel computer smette di sincronizzare finché non torni indietro.</p>
+          <div class="row">
+            <button id="caOn" class="primary">Attiva il nuovo certificato</button>
+            <button id="caOff" class="ghost hidden">Torna al certificato autofirmato</button>
+          </div>
+          <div class="msg" id="caMsg"></div>
         </div>
       </div>
 
@@ -216,6 +247,22 @@
 const $ = id => document.getElementById(id);
 /*I18N*/
 const EN = {
+ 'Certificato':'Certificate','Certificato del NAS':'NAS certificate','Firmato dalla CA (nessun avviso)':'Signed by the CA (no warning)','Autofirmato (avviso nel browser)':'Self-signed (browser warning)',
+ "Quando apri questa pagina il browser mostra un avviso, perché il certificato del NAS non è firmato da un'autorità che il browser conosce. Per toglierlo: importa una volta nel browser il certificato qui sotto, poi attiva il nuovo certificato. I computer con encluca continuano a funzionare, senza riabbinarli.":'When you open this page the browser shows a warning, because the NAS certificate is not signed by an authority the browser knows. To remove it: import the certificate below into your browser once, then activate the new certificate. Computers running encluca keep working, with no need to pair them again.',
+ '1. Scarica e importa il certificato':'1. Download and import the certificate','Scarica encluca-ca.crt':'Download encluca-ca.crt','Impronta del certificato, per controllare di aver importato quello giusto:':'Certificate fingerprint, to check that you imported the right one:',
+ 'Chrome o Edge su Linux':'Chrome or Edge on Linux','Impostazioni → Privacy e sicurezza → Sicurezza → Gestisci certificati → Autorità → Importa. Scegli il file e spunta "Considera attendibile per identificare siti web".':'Settings → Privacy and security → Security → Manage certificates → Authorities → Import. Choose the file and tick "Trust this certificate for identifying websites".',
+ 'Impostazioni → Privacy e sicurezza → Certificati → Mostra certificati → Autorità → Importa. Spunta "Considera attendibile per identificare siti web".':'Settings → Privacy & Security → Certificates → View Certificates → Authorities → Import. Tick "Trust this CA to identify websites".',
+ 'Windows (Chrome ed Edge)':'Windows (Chrome and Edge)','Doppio clic sul file → Installa certificato → Utente corrente → Colloca tutti i certificati nel seguente archivio → Autorità di certificazione radice attendibili.':'Double-click the file → Install Certificate → Current User → Place all certificates in the following store → Trusted Root Certification Authorities.',
+ 'macOS (Safari e Chrome)':'macOS (Safari and Chrome)','Doppio clic sul file: si apre Accesso Portachiavi. Apri il certificato "encluca-ca", espandi "Attendibilità" e scegli "Fidati sempre".':'Double-click the file: Keychain Access opens. Open the "encluca-ca" certificate, expand "Trust" and choose "Always Trust".',
+ 'iPhone e iPad':'iPhone and iPad','Apri il file, poi Impostazioni → Profilo scaricato → Installa. Poi Impostazioni → Generali → Info → Attendibilità certificati e attiva "encluca-ca".':'Open the file, then Settings → Profile Downloaded → Install. Then Settings → General → About → Certificate Trust Settings and enable "encluca-ca".',
+ 'Impostazioni → Sicurezza → Altre impostazioni di sicurezza → Installa da memoria → Certificato CA, e scegli il file.':'Settings → Security → More security settings → Install from storage → CA certificate, and choose the file.',
+ '2. Indirizzi del NAS':'2. NAS addresses','Gli indirizzi con cui raggiungi il NAS, uno per riga: finiscono nel certificato. Quelli con cui apri questa pagina e quelli usati dai computer vengono aggiunti da soli. Sono ammessi indirizzi IP di rete privata e nomi che finiscono per .local, .lan, .home, .internal, .home.arpa, .localdomain o .fritz.box.':'The addresses you use to reach the NAS, one per line: they go into the certificate. The ones you use to open this page and the ones used by the computers are added automatically. Private network IP addresses are allowed, and names ending in .local, .lan, .home, .internal, .home.arpa, .localdomain or .fritz.box.',
+ 'Salva indirizzi':'Save addresses','3. Attiva':'3. Activate','Dispositivi pronti: {n} di {m}':'Devices ready: {n} of {m}',
+ 'Un computer è pronto quando ha encluca 0.2.6 o successivo e si è collegato al NAS almeno una volta dopo l\'aggiornamento. Se attivi prima, quel computer smette di sincronizzare finché non torni indietro.':'A computer is ready when it runs encluca 0.2.6 or later and has connected to the NAS at least once after the update. If you activate earlier, that computer stops syncing until you go back.',
+ 'Attiva il nuovo certificato':'Activate the new certificate','Torna al certificato autofirmato':'Go back to the self-signed certificate','CA ricevuta':'CA received','CA non ancora ricevuta':'CA not received yet',
+ 'Questi computer non hanno ancora ricevuto il nuovo certificato e smetteranno di sincronizzare finché non si aggiornano o finché non torni indietro:':'These computers have not received the new certificate yet and will stop syncing until they update or until you go back:','Attivare lo stesso?':'Activate anyway?',
+ 'Non attivato: aspetta che tutti i dispositivi siano pronti.':'Not activated: wait until all devices are ready.','Attivato. Ricarica la pagina: se hai importato il certificato, l\'avviso non compare più.':'Activated. Reload the page: if you imported the certificate, the warning no longer appears.',
+ 'Ora il NAS usa di nuovo il certificato autofirmato. Ricarica la pagina.':'The NAS is using the self-signed certificate again. Reload the page.','Attivare il nuovo certificato? Puoi tornare indietro in qualsiasi momento.':'Activate the new certificate? You can go back at any time.',
  'Ripristino':'Restore',"Riporta tutto com'era":'Bring everything back',"Se un virus o un errore ha rovinato molti file, puoi riportare la cassaforte a com'era in un certo momento: i file modificati tornano alla versione di allora e quelli eliminati ricompaiono. I file creati dopo restano dove sono.":'If a virus or a mistake damaged many files, you can bring the vault back to how it was at a given moment: modified files return to the version they had then, and deleted ones reappear. Files created later stay where they are.',
  "Riporta com'era il":'Bring back to','Controlla':'Check',"Riporta com'era":'Bring it back',"I computer ricevono le modifiche come normali aggiornamenti. Per annullare, ripeti l'operazione scegliendo un momento di poco precedente a questo ripristino.":'Computers receive the changes as normal updates. To undo, repeat the operation choosing a moment just before this restore.',
  'Versioni precedenti da conservare per ogni file':'Previous versions to keep for each file','0 = non conservare':'0 = do not keep','Elimina le versioni più vecchie di (giorni)':'Delete versions older than (days)','0 = mai':'0 = never','Salva':'Save','Salvato.':'Saved.',
@@ -331,6 +378,7 @@ async function refresh(){
       const v = document.createElement('span'); v.className = 'hint'; v.textContent = ' · ' + (d.version ? 'v' + d.version : t('versione < 0.2.2'));
       tr.children[1].append(v);
       if(d.outdated){ tr.children[1].insertAdjacentHTML('beforeend', ' ' + chip('ko', t('Da aggiornare'))); }
+      tr.children[1].insertAdjacentHTML('beforeend', ' ' + chip(d.caReady ? 'ok' : 'wait', d.caReady ? t('CA ricevuta') : t('CA non ancora ricevuta')));
     }
     tr.querySelector('button').onclick = async () => { if(confirm(t('Revocare “{n}”? Non potrà più sincronizzare.', {n:d.name}))){ await api('/admin/api/devices?id='+encodeURIComponent(d.id), {}, 'DELETE'); refresh(); } };
     tb.append(tr);
@@ -339,6 +387,14 @@ async function refresh(){
   $('trChip').className = 'chip ' + (tr.files ? 'info' : 'ok'); $('trChip').textContent = tr.files ? t('{n} file', {n:tr.files}) : t('Vuoto');
   $('trInfo').textContent = tr.files ? t('{n} file eliminati ({s}), il più vecchio del {d}.', {n:tr.files, s:size(tr.bytes), d:new Date(tr.oldest).toLocaleString(LOCALE())}) : t('Nessun file eliminato negli ultimi 30 giorni.');
   $('trDay').disabled = $('trAll').disabled = !tr.files;
+  const ca = s.ca || {};
+  $('caChip').className = 'chip ' + (ca.active ? 'ok' : 'wait');
+  $('caChip').textContent = ca.active ? t('Firmato dalla CA (nessun avviso)') : t('Autofirmato (avviso nel browser)');
+  $('caFp').textContent = (ca.fingerprint || '').replace(/(..)(?!$)/g, '$1:');
+  if(document.activeElement !== $('caHosts')) $('caHosts').value = (ca.hosts || []).join('\n');
+  const paired = s.devices.filter(d => !d.pending);
+  $('caReady').textContent = t('Dispositivi pronti: {n} di {m}', {n:paired.filter(d => d.caReady).length, m:paired.length});
+  $('caOn').classList.toggle('hidden', !!ca.active); $('caOff').classList.toggle('hidden', !ca.active);
   const vs = s.versions || {files:0, bytes:0, keep:5, maxAgeDays:90};
   if(document.activeElement !== $('vKeep')) $('vKeep').value = vs.keep;
   if(document.activeElement !== $('vAge')) $('vAge').value = vs.maxAgeDays;
@@ -387,6 +443,22 @@ $('pwBtn').onclick = async () => {
 const restoreTrash = async hours => {
   if(!confirm(hours ? t('Ripristinare i file eliminati nelle ultime 24 ore?') : t('Ripristinare tutti i file del cestino?'))) return;
   try{ const r = await api('/admin/api/trash/restore', {Hours:hours}); $('trMsg').textContent = t('Ripristinati {n} file: arriveranno sui computer al prossimo allineamento.', {n:r.restored}); refresh(); }catch(e){ $('trMsg').textContent=e.message; } };
+$('caDl').onclick = () => { location.href = '/encluca-ca.crt'; };
+$('caHostsSave').onclick = async () => {
+  try{ await api('/admin/api/ca/hosts', {Hosts:$('caHosts').value.split('\n')}); $('caHostsMsg').textContent = t('Salvato.'); refresh(); }catch(e){ $('caHostsMsg').textContent = e.message; } };
+const caSet = async (active, force) => {
+  const r = await fetch('/admin/api/ca/activate', {method:'POST', headers:{'X-Encluca':'1','Content-Type':'application/json'}, body:JSON.stringify({Active:active, Force:!!force})});
+  const j = await r.json().catch(() => ({}));
+  if(r.status === 409 && j.notReady){
+    if(confirm(t('Questi computer non hanno ancora ricevuto il nuovo certificato e smetteranno di sincronizzare finché non si aggiornano o finché non torni indietro:') + '\n\n' + j.notReady.join('\n') + '\n\n' + t('Attivare lo stesso?'))) return caSet(true, true);
+    $('caMsg').textContent = t('Non attivato: aspetta che tutti i dispositivi siano pronti.'); return;
+  }
+  if(!r.ok){ $('caMsg').textContent = j.error || (t('errore') + ' ' + r.status); return; }
+  $('caMsg').textContent = active ? t('Attivato. Ricarica la pagina: se hai importato il certificato, l\'avviso non compare più.') : t('Ora il NAS usa di nuovo il certificato autofirmato. Ricarica la pagina.');
+  refresh();
+};
+$('caOn').onclick = () => { if(confirm(t('Attivare il nuovo certificato? Puoi tornare indietro in qualsiasi momento.'))) caSet(true); };
+$('caOff').onclick = () => caSet(false);
 $('vSave').onclick = async () => {
   try{ await api('/admin/api/versions/config', {Keep:+$('vKeep').value, MaxAgeDays:+$('vAge').value}); $('vMsg').textContent = t('Salvato.'); refresh(); }catch(e){ $('vMsg').textContent = e.message; } };
 const vrIso = () => { const v = $('vrAt').value; return v ? new Date(v).toISOString() : ''; };
