@@ -48,12 +48,14 @@ func TestUpdateEndToEnd(t *testing.T) {
 	sum := sha256.Sum256(arch)
 	sums := hex.EncodeToString(sum[:]) + "  " + name + "\n"
 	files := map[string][]byte{name: arch, "SHA256SUMS": []byte(sums), "SHA256SUMS.sig": signed(t, priv, sums)}
-	var srv *httptest.Server
-	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// l'indirizzo dei file si ricava dalla richiesta: leggere srv.URL dall'handler è una
+	// corsa con l'assegnazione di srv (le richieste arrivano da un altro processo, e il race
+	// detector non vede che l'assegnazione viene prima)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/latest" {
 			var as []map[string]string
 			for n := range files {
-				as = append(as, map[string]string{"name": n, "browser_download_url": srv.URL + "/dl/" + n})
+				as = append(as, map[string]string{"name": n, "browser_download_url": "http://" + r.Host + "/dl/" + n})
 			}
 			json.NewEncoder(w).Encode(map[string]any{"tag_name": "v0.2.1", "assets": as})
 			return
