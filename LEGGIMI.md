@@ -107,6 +107,22 @@ L'API di Google Drive è gratuita e non richiede la fatturazione. L'unico limite
 - **Dalla 0.2.2 il NAS accetta solo computer con encluca 0.2.2 o successivo.** I computer con la 0.2.x si aggiornano da soli; quelli con la 0.1.x vanno reinstallati a mano. Nella pagina *Dispositivi* del NAS ogni computer mostra la sua versione, e quelli da aggiornare hanno l'etichetta "Da aggiornare".
 - **NAS:** l'hub non si aggiorna da solo. Quando c'è una versione nuova, la sua pagina lo segnala. Per aggiornare: TrueNAS → Apps → encluca → **Stop**, poi **Start**.
 
+## Togliere l'avviso del browser
+
+Quando apri la pagina del NAS il browser avvisa che la connessione non è privata, perché il certificato del NAS non è firmato da un'autorità che conosce. Si può togliere, e conviene farlo: così, se un giorno l'avviso ricomparisse, sarebbe un vero segnale d'allarme.
+
+Ordine consigliato:
+
+1. Aggiorna il NAS e tutti i computer a encluca **0.2.6 o successivo**.
+2. Nella pagina del NAS, in *Dispositivi*, aspetta che ogni computer mostri **"CA ricevuta"** (succede da solo al primo collegamento dopo l'aggiornamento).
+3. In *Certificato* premi **Scarica encluca-ca.crt** e importalo nel browser o nel sistema di ogni computer da cui apri la pagina del NAS (le istruzioni sono nella stessa scheda). Controlla che l'impronta coincida con quella mostrata.
+4. Controlla che in *Indirizzi del NAS* ci siano gli indirizzi con cui raggiungi il NAS (di solito sono già lì).
+5. Premi **Attiva il nuovo certificato** e ricarica la pagina: l'avviso non compare più.
+
+Se un computer non è pronto, il NAS te lo dice prima di attivare. Per tornare indietro in qualsiasi momento: **Torna al certificato autofirmato**; i computer continuano a funzionare in entrambi i casi, senza riabbinarli.
+
+Il certificato importato vale solo per indirizzi di rete privata e nomi di rete locale (per esempio `192.168.x.x` o `nas.local`): anche se la sua chiave venisse rubata, non potrebbe essere usato per falsificare siti pubblici. Il certificato del server si rinnova da solo ogni anno.
+
 ## Versioni precedenti e ripristino
 
 Quando modifichi un file, il NAS conserva (cifrata) la versione precedente: **5 versioni per file, per 90 giorni**. Puoi cambiare questi valori nella pagina del NAS, in *Impostazioni* (0 versioni = non conservare).
@@ -141,7 +157,7 @@ Il NAS conosce soltanto: numero e dimensione dei file, date di modifica e strutt
 - **Un solo NAS.** I PC non si sincronizzano direttamente tra loro, ma passano sempre dal NAS.
 - **Apertura.** All'apertura vengono decifrati tutti i file: con molti GB servono alcuni secondi o minuti.
 - **Interfaccia nel browser.** L'interfaccia è una pagina web locale con un collegamento sul desktop; non c'è un'icona nella barra di sistema.
-- **Certificato autofirmato.** Il NAS usa un certificato autofirmato. I PC lo verificano tramite l'impronta contenuta nel codice di abbinamento; il browser invece mostra un avviso.
+- **Avviso del browser.** Finché non importi il certificato del NAS e non attivi quello nuovo (vedi *Togliere l'avviso del browser*), il browser mostra un avviso quando apri la pagina del NAS. I PC con encluca non ne risentono: riconoscono il NAS da soli.
 
 ## Recupero d'emergenza senza Encluca
 

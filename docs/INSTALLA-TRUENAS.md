@@ -142,7 +142,7 @@ Puoi recuperarla in due modi.
 
 **4.2 Apri l'interfaccia**
 Vai su `https://IP-DEL-NAS:8443`.
-Il browser avvisa che il certificato non è attendibile. È previsto: il certificato è autofirmato dall'hub. Scegli *Avanzate → Procedi*. I PC non si basano sul browser: verificano il NAS tramite l'impronta del certificato contenuta nel codice di abbinamento.
+Il browser avvisa che il certificato non è attendibile. È previsto: il certificato è autofirmato dall'hub. Scegli *Avanzate → Procedi*. Per toglierlo in seguito, vedi *Togliere l'avviso del browser* in `LEGGIMI.md`. I PC non si basano sul browser: verificano il NAS tramite l'impronta del certificato contenuta nel codice di abbinamento.
 
 **4.3 Accedi e cambia subito la password**
 Nel riquadro giallo *Cambia la password iniziale* inserisci la password attuale e una nuova di almeno 14 caratteri. Il file `admin-password.txt` viene cancellato automaticamente.
