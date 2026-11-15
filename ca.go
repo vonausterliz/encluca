@@ -11,8 +11,10 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"math/big"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -262,4 +264,91 @@ func (h *Hub) caStatusLocked() map[string]any {
 		res["leafExpires"] = h.leaf.Leaf.NotAfter
 	}
 	return res
+}
+
+// ---- API ----
+
+// adminCAActivate: POST {Active, Force}. Attivare il nuovo certificato taglierebbe fuori i
+// dispositivi che non hanno ancora ricevuto la CA: senza Force l'hub rifiuta e li elenca.
+func (h *Hub) adminCAActivate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
+		return
+	}
+	var body struct{ Active, Force bool }
+	readBody(r, &body)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if body.Active && !body.Force {
+		notReady := []string{}
+		for _, d := range h.cfg.Devices {
+			if d.TokenHash != "" && d.CAFP != h.caFingerprint {
+				notReady = append(notReady, d.Name)
+			}
+		}
+		if len(notReady) > 0 {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":    T("alcuni dispositivi non hanno ancora ricevuto il nuovo certificato: con l'attivazione smetterebbero di sincronizzare"),
+				"notReady": notReady,
+			})
+			return
+		}
+	}
+	h.cfg.CA.Active = body.Active
+	if err := h.saveCfg(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if body.Active {
+		h.log.Print(T("Certificato del NAS: ora si usa quello firmato dalla CA"))
+	} else {
+		h.log.Print(T("Certificato del NAS: si torna a quello autofirmato"))
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// adminCAHosts: POST {Hosts: [...]} sostituisce gli indirizzi messi nel certificato del server.
+func (h *Hub) adminCAHosts(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
+		return
+	}
+	var body struct{ Hosts []string }
+	readBody(r, &body)
+	var hosts []string
+	seen := map[string]bool{}
+	for _, x := range body.Hosts {
+		x = strings.ToLower(strings.TrimSpace(x))
+		if x == "" || seen[x] {
+			continue
+		}
+		if !hostAllowedByCA(x) {
+			writeErr(w, http.StatusBadRequest, fmt.Sprintf(T("indirizzo non ammesso: %s (servono indirizzi IP privati o nomi di rete locale)"), x))
+			return
+		}
+		seen[x] = true
+		hosts = append(hosts, x)
+	}
+	if len(hosts) > maxCAHosts {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf(T("troppi indirizzi: al massimo %d"), maxCAHosts))
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.cfg.CA.Hosts = hosts
+	h.leaf = nil
+	if err := h.saveCfg(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// serveCACert: il certificato della CA, da importare nel browser. È un dato pubblico (lo riceve
+// chiunque si colleghi), quindi non richiede l'accesso.
+func (h *Hub) serveCACert(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
+	w.Header().Set("Content-Disposition", `attachment; filename="encluca-ca.crt"`)
+	w.Header().Set("Cache-Control", "no-store")
+	w.Write(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: h.caCert.Raw}))
 }

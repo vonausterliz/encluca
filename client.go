@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -63,6 +64,8 @@ type clientConfig struct {
 	WorkDir     string `json:"workDir"`
 	Lang        string `json:"lang,omitempty"`       // lingua dell'interfaccia e dei messaggi: "it" | "en"
 	AutoUpdate  *bool  `json:"autoUpdate,omitempty"` // nil = attivo (config 0.1.x)
+	// CAFingerprint: impronta della CA del NAS, ricevuta sul canale già verificato (vedi ca.go)
+	CAFingerprint string `json:"caFingerprint,omitempty"`
 }
 
 type plainSnap struct {
@@ -126,6 +129,12 @@ type Client struct {
 
 	hubProtoOK bool // l'ultima risposta del NAS dichiarava il protocollo 2: si può scrivere
 
+	// certificati accettati dal NAS, letti a ogni connessione (vedi verifyHubConn): un mutex a
+	// parte perché la verifica gira durante la connessione e non deve aspettare c.mu
+	pinMu   sync.Mutex
+	pinLeaf string // impronta del certificato autofirmato dell'hub
+	pinCA   string // impronta della CA dell'hub ("" = non ancora ricevuta)
+
 	// dischi che non distinguono maiuscole e minuscole (macOS, Windows): vedi casefold.go
 	caseFold bool
 	fold     map[string]string // nome in minuscolo -> voce presente nella cartella aperta
@@ -179,7 +188,7 @@ func newClient(dir string) (*Client, error) {
 }
 
 func (c *Client) setupHTTP() {
-	fp := c.cfg.Fingerprint
+	c.setPins(c.cfg.Fingerprint, c.cfg.CAFingerprint)
 	c.hc = &http.Client{
 		Timeout: 0,
 		Transport: &http.Transport{
@@ -187,22 +196,65 @@ func (c *Client) setupHTTP() {
 			TLSHandshakeTimeout: 15 * time.Second,
 			IdleConnTimeout:     90 * time.Second,
 			TLSClientConfig: &tls.Config{
-				// Il certificato dell'hub è autofirmato: lo verifichiamo tramite impronta (pinning),
-				// ricevuta nel codice di abbinamento. Nessun altro server viene accettato.
+				// Il certificato dell'hub non è firmato da un'autorità pubblica: lo verifichiamo noi
+				// (vedi verifyHubConn). Nessun altro server viene accettato.
 				InsecureSkipVerify: true,
-				VerifyConnection: func(cs tls.ConnectionState) error {
-					if len(cs.PeerCertificates) == 0 {
-						return errors.New(T("nessun certificato dal NAS"))
-					}
-					sum := sha256.Sum256(cs.PeerCertificates[0].Raw)
-					if hex.EncodeToString(sum[:]) != fp {
-						return errors.New(T("il certificato del NAS non corrisponde a quello abbinato"))
-					}
-					return nil
-				},
+				VerifyConnection:   c.verifyHubConn,
 			},
 		},
 	}
+}
+
+func (c *Client) setPins(leaf, ca string) {
+	c.pinMu.Lock()
+	c.pinLeaf, c.pinCA = leaf, ca
+	c.pinMu.Unlock()
+}
+
+// verifyHubConn accetta il NAS in due casi:
+//   - presenta il certificato autofirmato la cui impronta è arrivata con il codice di abbinamento;
+//   - presenta un certificato firmato dalla CA del NAS, la cui impronta è arrivata con il codice
+//     di abbinamento o, per i computer già abbinati, dal NAS stesso su una connessione già verificata.
+//
+// Il nome nel certificato non si controlla: conta chi l'ha firmato, e la chiave della CA sta
+// solo sul NAS. Così il certificato del server può essere rinnovato senza riabbinare nessuno.
+func (c *Client) verifyHubConn(cs tls.ConnectionState) error {
+	if len(cs.PeerCertificates) == 0 {
+		return errors.New(T("nessun certificato dal NAS"))
+	}
+	c.pinMu.Lock()
+	leafPin, caPin := c.pinLeaf, c.pinCA
+	c.pinMu.Unlock()
+	leaf := cs.PeerCertificates[0]
+	if leafPin != "" && certFingerprint(leaf.Raw) == leafPin {
+		return nil
+	}
+	if caPin != "" {
+		for _, pc := range cs.PeerCertificates[1:] {
+			if certFingerprint(pc.Raw) != caPin {
+				continue
+			}
+			roots := x509.NewCertPool()
+			roots.AddCert(pc)
+			if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err == nil {
+				return nil
+			}
+		}
+	}
+	return errors.New(T("il certificato del NAS non corrisponde a quello abbinato"))
+}
+
+// validFingerprint: 64 cifre esadecimali minuscole (sha256).
+func validFingerprint(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, ch := range s {
+		if !(ch >= '0' && ch <= '9' || ch >= 'a' && ch <= 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *Client) saveState() {
@@ -237,7 +289,7 @@ func (e *httpStatusErr) Error() string {
 
 func (c *Client) req(ctx context.Context, method, p string, q url.Values, body io.Reader, size int64) (*http.Response, error) {
 	c.mu.Lock()
-	base, tok := c.cfg.HubURL, c.cfg.Token
+	base, tok, knownCA := c.cfg.HubURL, c.cfg.Token, c.cfg.CAFingerprint
 	c.mu.Unlock()
 	u := strings.TrimRight(base, "/") + p
 	if q != nil {
@@ -253,10 +305,25 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 	r.Header.Set("Authorization", "Bearer "+tok)
 	r.Header.Set("X-Encluca-Proto", strconv.Itoa(protoVersion))
 	r.Header.Set("X-Encluca-Version", Version)
+	if knownCA != "" {
+		r.Header.Set("X-Encluca-CA", knownCA) // il NAS sa così che questo computer è pronto per il nuovo certificato
+	}
 	resp, err := c.hc.Do(r)
 	if err != nil {
 		c.setOnline(false, "NAS non raggiungibile")
 		return nil, err
+	}
+	// Il NAS comunica l'impronta della sua CA. La risposta arriva da una connessione già
+	// verificata (certificato abbinato, o CA già nota), quindi ci si può fidare: da ora si
+	// accetta anche un certificato firmato da quella CA.
+	if ca := resp.Header.Get("X-Encluca-CA"); ca != knownCA && validFingerprint(ca) {
+		c.mu.Lock()
+		if c.cfg.HubURL == base { // non durante un cambio di NAS
+			c.cfg.CAFingerprint = ca
+			c.setPins(c.cfg.Fingerprint, ca)
+			saveJSON(c.cfgPath(), &c.cfg)
+		}
+		c.mu.Unlock()
 	}
 	if resp.StatusCode == http.StatusUpgradeRequired {
 		// il NAS è più nuovo di questo client: niente sincronizzazione finché non si aggiorna
@@ -1393,6 +1460,7 @@ func (c *Client) scanLoop(ctx context.Context) {
 // monouso da scambiare con il token; EL1 (hub fino alla 0.1.6) conteneva direttamente il token.
 type pairCode struct {
 	URL, Token, Key, Fingerprint string
+	CA                           string // impronta della CA del NAS (codici generati dalla 0.2.6)
 }
 
 func parsePairCode(code string) (pairCode, error) {
@@ -1416,6 +1484,9 @@ func parsePairCode(code string) (pairCode, error) {
 		return pairCode{}, bad
 	}
 	pc := pairCode{URL: m["u"], Fingerprint: m["f"]}
+	if validFingerprint(m["c"]) {
+		pc.CA = m["c"]
+	}
 	if ver == "EL2" {
 		pc.Key = m["k"]
 	} else {
@@ -1485,6 +1556,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 	old := c.cfg
 	oldMeta, _ := os.ReadFile(c.metaCache())
 	c.cfg.HubURL, c.cfg.Token, c.cfg.Fingerprint = strings.TrimRight(u, "/"), pc.Token, pc.Fingerprint
+	c.cfg.CAFingerprint = pc.CA
 	if strings.TrimSpace(name) != "" {
 		c.cfg.DeviceName = strings.TrimSpace(name)
 	}
@@ -1854,7 +1926,7 @@ func (c *Client) Status() map[string]any {
 		"open": c.cip != nil, "staleOpen": c.cip == nil && c.st.Open, "workDir": c.cfg.WorkDir,
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
 		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
-		"log": c.log.Lines(), "update": c.updateStatusLocked(),
+		"log": c.log.Lines(), "update": c.updateStatusLocked(), "caKnown": c.cfg.CAFingerprint != "",
 	}
 }
 

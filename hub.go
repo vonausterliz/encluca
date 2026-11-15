@@ -60,6 +60,7 @@ type Device struct {
 	Created   time.Time `json:"created"`
 	LastSeen  time.Time `json:"lastSeen"`
 	Version   string    `json:"version,omitempty"` // versione di encluca dichiarata dal client
+	CAFP      string    `json:"caFp,omitempty"`    // impronta della CA che il client ha salvato
 	// abbinamento in attesa: il codice EL2 contiene una chiave monouso (qui solo l'hash) che il
 	// client scambia con il token definitivo. Finché TokenHash è vuoto il dispositivo non è attivo.
 	PairHash string    `json:"pairHash,omitempty"`
@@ -295,6 +296,17 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 			return
 		}
 		h.learnHost(r)
+		// scambio dell'impronta della CA (vedi ca.go): l'hub la comunica al dispositivo, che
+		// la salva; il dispositivo dichiara quella che ha, così l'hub sa chi è pronto
+		w.Header().Set("X-Encluca-CA", h.caFingerprint)
+		if fp := r.Header.Get("X-Encluca-CA"); validFingerprint(fp) {
+			h.mu.Lock()
+			if d.CAFP != fp {
+				d.CAFP = fp
+				h.saveCfg()
+			}
+			h.mu.Unlock()
+		}
 		// solo versioni ben formate finiscono nella configurazione e nella pagina dei dispositivi
 		if v := strings.TrimPrefix(r.Header.Get("X-Encluca-Version"), "v"); v != "" && validVersion(v) {
 			h.mu.Lock()
@@ -759,7 +771,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	devs := make([]map[string]any, 0, len(h.cfg.Devices))
 	for _, d := range h.cfg.Devices {
 		outdated := d.TokenHash != "" && (d.Version == "" || newerVersion("0.2.2", d.Version))
-		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == "", "version": d.Version, "outdated": outdated})
+		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == "", "version": d.Version, "outdated": outdated, "caReady": d.TokenHash != "" && d.CAFP == h.caFingerprint})
 	}
 	seq := h.idx.Seq
 	browse := h.cfg.BrowseEnabled
@@ -808,7 +820,8 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		if u == "" {
 			u = "https://" + r.Host
 		}
-		code, _ := json.Marshal(map[string]string{"u": u, "k": key, "f": h.fingerprint})
+		// "f": certificato autofirmato; "c": CA. Il client accetta l'uno o l'altra (vedi ca.go)
+		code, _ := json.Marshal(map[string]string{"u": u, "k": key, "f": h.fingerprint, "c": h.caFingerprint})
 		h.log.Printf(T("Nuovo dispositivo abbinabile: %q"), d.Name)
 		writeJSON(w, http.StatusOK, map[string]string{"code": "EL2-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
 	case http.MethodDelete:
@@ -924,6 +937,9 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/admin/api/lang", h.withAdmin(h.adminLang))
 	mux.HandleFunc("/admin/api/browse", h.withAdmin(h.adminBrowseToggle))
 	mux.HandleFunc("/admin/api/trash/restore", h.withAdmin(h.adminTrashRestore))
+	mux.HandleFunc("/admin/api/ca/activate", h.withAdmin(h.adminCAActivate))
+	mux.HandleFunc("/admin/api/ca/hosts", h.withAdmin(h.adminCAHosts))
+	mux.HandleFunc("/encluca-ca.crt", h.serveCACert)
 	mux.HandleFunc("/admin/api/versions/config", h.withAdmin(h.adminVersionsConfig))
 	mux.HandleFunc("/admin/api/versions/restore-at", h.withAdmin(h.adminVersionsRestoreAt))
 	mux.HandleFunc("/admin/api/vault/versions", h.withBrowse(h.apiBrowseVersions))
