@@ -49,8 +49,41 @@ var openInBrowser = func(path string) error {
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", path).Start()
 	default:
+		// xdg-open su un .html usa l'associazione dei file text/html, che può essere un
+		// programma qualunque (es. Thunderbird lo apre come nuova mail). Si lancia invece il
+		// browser predefinito, quello dei link http; xdg-open resta come ripiego.
+		if id := defaultBrowserID(); id != "" {
+			if err := exec.Command("gtk-launch", id, path).Start(); err == nil {
+				return nil
+			}
+		}
 		return exec.Command("xdg-open", path).Start()
 	}
+}
+
+// defaultBrowserID restituisce il nome del file .desktop del browser predefinito ("" se
+// non si trova).
+func defaultBrowserID() string {
+	for _, c := range [][]string{
+		{"xdg-settings", "get", "default-web-browser"},
+		{"xdg-mime", "query", "default", "x-scheme-handler/http"},
+	} {
+		if out, err := exec.Command(c[0], c[1:]...).Output(); err == nil {
+			if id := browserDesktopID(string(out)); id != "" {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+// browserDesktopID valida l'output dei comandi xdg: un solo nome che finisce in .desktop.
+func browserDesktopID(out string) string {
+	id := strings.TrimSpace(out)
+	if !strings.HasSuffix(id, ".desktop") || strings.ContainsAny(id, "/ \n\t") || strings.HasPrefix(id, "-") {
+		return ""
+	}
+	return id
 }
 
 // unlockFileDir è la cartella del file di accesso: la home dell'utente, perché i browser

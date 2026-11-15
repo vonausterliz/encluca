@@ -122,3 +122,19 @@ func TestUIUnlockFlow(t *testing.T) {
 		t.Fatal("sessione persa dopo il riavvio")
 	}
 }
+
+func TestBrowserDesktopID(t *testing.T) {
+	for in, want := range map[string]string{
+		"brave-browser.desktop\n": "brave-browser.desktop",
+		"firefox_firefox.desktop": "firefox_firefox.desktop",
+		"":                        "",
+		"xdg-settings: unknown\n": "",
+		"-x.desktop":              "",
+		"a/b.desktop":             "",
+		"a.desktop\nb.desktop\n":  "",
+	} {
+		if got := browserDesktopID(in); got != want {
+			t.Errorf("browserDesktopID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
