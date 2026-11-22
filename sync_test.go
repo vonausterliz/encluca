@@ -20,12 +20,14 @@ import (
 )
 
 type testEnv struct {
-	t      *testing.T
-	hub    *Hub
-	srv    *httptest.Server
-	down   atomic.Bool
-	ctx    context.Context
-	cancel context.CancelFunc
+	t    *testing.T
+	hub  *Hub
+	srv  *httptest.Server
+	down atomic.Bool
+	// notFound: percorso a cui l'hub risponde 404 (simula un hub di una versione precedente)
+	notFound string
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -44,6 +46,10 @@ func newTestEnv(t *testing.T) *testEnv {
 				conn.Close()
 				return
 			}
+		}
+		if env.notFound != "" && r.URL.Path == env.notFound {
+			http.NotFound(w, r)
+			return
 		}
 		inner.ServeHTTP(w, r)
 	}))

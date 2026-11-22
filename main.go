@@ -230,6 +230,7 @@ func setupClientUpdater(c *Client, dir string) {
 	var done struct{ From, To string }
 	if loadJSON(rec, &done) == nil {
 		c.log.Printf(T("Aggiornamento installato: %s → %s"), done.From, done.To)
+		c.noteUpdated(done.To)
 		os.Remove(rec)
 	}
 	u, err := newUpdater(dir, Version, c.log.Printf)

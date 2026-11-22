@@ -93,10 +93,10 @@ func assetName(version, goos, goarch string) string {
 func verifySums(sums, sig []byte, pub ed25519.PublicKey) (map[string]string, error) {
 	s, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sig)))
 	if err != nil || len(s) != ed25519.SignatureSize {
-		return nil, errors.New(T("firma dell'aggiornamento illeggibile"))
+		return nil, newVerifyError(T("firma dell'aggiornamento illeggibile"))
 	}
 	if !ed25519.Verify(pub, sums, s) {
-		return nil, errors.New(T("firma dell'aggiornamento non valida"))
+		return nil, newVerifyError(T("firma dell'aggiornamento non valida"))
 	}
 	out := map[string]string{}
 	sc := bufio.NewScanner(bytes.NewReader(sums))
@@ -206,6 +206,13 @@ func extractBinary(archivePath, version, goos, goarch, outPath string) (err erro
 
 const defaultUpdateAPI = "https://api.github.com/repos/vonausterliz/encluca-releases/releases/latest"
 
+// verifyError: l'aggiornamento è stato rifiutato dalla verifica di firma o impronta.
+type verifyError struct{ msg string }
+
+func (e *verifyError) Error() string { return e.msg }
+
+func newVerifyError(msg string) error { return &verifyError{msg} }
+
 type updateState struct {
 	Enabled   bool      `json:"enabled"`
 	Current   string    `json:"current"`
@@ -213,6 +220,8 @@ type updateState struct {
 	Staged    string    `json:"staged,omitempty"`    // scaricata e verificata, pronta
 	LastCheck time.Time `json:"lastCheck"`
 	Error     string    `json:"error,omitempty"`
+	// VerifyFailed: l'ultimo errore è una verifica di firma o impronta fallita (avviso dedicato)
+	VerifyFailed bool `json:"verifyFailed,omitempty"`
 }
 
 type updater struct {
@@ -443,6 +452,8 @@ func (u *updater) check(ctx context.Context) error {
 	v, err := u.prepare(ctx)
 	u.mu.Lock()
 	u.st.LastCheck = time.Now()
+	var ve *verifyError
+	u.st.VerifyFailed = errors.As(err, &ve)
 	if err != nil {
 		u.st.Error = err.Error()
 	} else {
@@ -487,7 +498,7 @@ func (u *updater) prepare(ctx context.Context) (string, error) {
 	}()
 	sumsURL, sigURL := assets["SHA256SUMS"], assets["SHA256SUMS.sig"]
 	if sumsURL == "" || sigURL == "" {
-		return "", errors.New(T("il rilascio non è firmato (mancano SHA256SUMS o SHA256SUMS.sig)"))
+		return "", newVerifyError(T("il rilascio non è firmato (mancano SHA256SUMS o SHA256SUMS.sig)"))
 	}
 	sums, err := readLimited(ctx, u.hc, sumsURL, maxSumsSize)
 	if err != nil {
@@ -512,7 +523,7 @@ func (u *updater) prepare(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if got != want {
-		return "", errors.New(T("il pacchetto scaricato non corrisponde all'impronta firmata"))
+		return "", newVerifyError(T("il pacchetto scaricato non corrisponde all'impronta firmata"))
 	}
 	if err := extractBinary(tmpArchive, v, u.goos, u.goarch, tmpBin); err != nil {
 		return "", err
@@ -584,8 +595,10 @@ func (u *updater) discardStaged() {
 // failInstall scarta il pacchetto pronto e riporta l'errore nello stato.
 func (u *updater) failInstall(err error) {
 	u.discardStaged()
+	var ve *verifyError
 	u.mu.Lock()
 	u.st.Error = err.Error()
+	u.st.VerifyFailed = errors.As(err, &ve)
 	u.mu.Unlock()
 }
 

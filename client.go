@@ -68,6 +68,9 @@ type clientConfig struct {
 	CAFingerprint string `json:"caFingerprint,omitempty"`
 	// AutoCloseMin: minuti senza modifiche prima della chiusura automatica (nil = 30, 0 = mai)
 	AutoCloseMin *int `json:"autoCloseMin,omitempty"`
+	// soglie degli avvisi in ore (nil = predefinita, 0 = avviso disattivato): vedi alerts.go
+	AlertOfflineHours *int `json:"alertOfflineHours,omitempty"`
+	AlertBackupHours  *int `json:"alertBackupHours,omitempty"`
 }
 
 type plainSnap struct {
@@ -145,6 +148,12 @@ type Client struct {
 	upd      *updater      // nil se l'aggiornamento automatico non è disponibile
 	updating bool          // installazione in corso: la cassaforte non si apre
 	restart  chan struct{} // segnala a runClient di riavviare il servizio
+
+	// avvisi (alerts.go)
+	offlineSince time.Time   // primo tentativo fallito dell'interruzione in corso (zero se raggiungibile)
+	backup       *backupInfo // stato del backup Drive dal NAS (nil = sconosciuto o hub senza l'API)
+	updatedTo    string      // versione installata dall'ultimo aggiornamento automatico
+	updatedAt    time.Time
 
 	loops sync.WaitGroup // cicli in background avviati da run (i test li aspettano prima di pulire)
 
@@ -386,6 +395,11 @@ func (c *Client) setOnline(on bool, msg string) {
 		}
 	}
 	c.online = on
+	if on {
+		c.offlineSince = time.Time{}
+	} else if c.offlineSince.IsZero() {
+		c.offlineSince = time.Now()
+	}
 	if on {
 		c.lastErr = ""
 	} else if msg != "" {
@@ -1971,6 +1985,7 @@ func (c *Client) Status() map[string]any {
 		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(), "update": c.updateStatusLocked(), "caKnown": c.cfg.CAFingerprint != "",
 		"autoClose": c.autoCloseStatusLocked(time.Now()),
+		"alerts":    c.alertsLocked(time.Now()), "alertCfg": c.alertCfgLocked(),
 	}
 }
 
@@ -2001,7 +2016,7 @@ func (c *Client) SetWorkDir(dir string) error {
 }
 
 func (c *Client) run(ctx context.Context) {
-	for _, loop := range []func(context.Context){c.pullLoop, c.pushLoop, c.scanLoop} {
+	for _, loop := range []func(context.Context){c.pullLoop, c.pushLoop, c.scanLoop, c.backupLoop} {
 		c.loops.Add(1)
 		go func() { defer c.loops.Done(); loop(ctx) }()
 	}
