@@ -294,4 +294,7 @@ var enMessages = map[string]string{
 	"Aggiornamento installato: versione %s":                                                 "Update installed: version %s",
 	"indica un numero di ore tra 0 e 720":                                                   "enter a number of hours between 0 and 720",
 	"AVVISO:":                                                                               "NOTICE:",
+	"Servizio encluca non raggiungibile":                                                    "Encluca service not reachable",
+	"%d in coda":                                                                            "%d queued",
+	"Cassaforte rimasta aperta":                                                             "Vault left open",
 }
