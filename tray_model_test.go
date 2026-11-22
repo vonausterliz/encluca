@@ -103,3 +103,19 @@ func TestTrayLockAction(t *testing.T) {
 		}
 	}
 }
+
+func TestTrayIcons(t *testing.T) {
+	for _, s := range []string{"closed", "open", "problem"} {
+		p := trayIconPNG(s)
+		if len(p) < 100 || string(p[1:4]) != "PNG" {
+			t.Fatalf("%s: PNG non valido", s)
+		}
+		ico := trayIconICO(s)
+		if ico[2] != 1 || ico[4] != 1 || string(ico[23:26]) != "PNG" {
+			t.Fatalf("%s: ICO non valido", s)
+		}
+	}
+	if string(trayIconPNG("open")) == string(trayIconPNG("closed")) {
+		t.Fatal("icone di stati diversi identiche")
+	}
+}

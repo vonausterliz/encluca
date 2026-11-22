@@ -118,6 +118,13 @@ func main() {
 		os.WriteFile(filepath.Join(*data, "admin-password.txt"), []byte(pw+"\n"), 0o600)
 		fmt.Println("Nuova password amministratore:", pw)
 		fmt.Println("Riavvia il servizio hub per applicarla.")
+	case "tray":
+		fs := flag.NewFlagSet("tray", flag.ExitOnError)
+		data := fs.String("data", envOr("ENCLUCA_DATA", defaultClientDir()), "cartella dati del client")
+		fs.Parse(os.Args[2:])
+		if err := runTray(*data); err != nil {
+			fatal(err)
+		}
 	case "client":
 		fs := flag.NewFlagSet("client", flag.ExitOnError)
 		data := fs.String("data", envOr("ENCLUCA_DATA", defaultClientDir()), "cartella dati del client")
