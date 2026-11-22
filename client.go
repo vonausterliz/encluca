@@ -146,6 +146,8 @@ type Client struct {
 	updating bool          // installazione in corso: la cassaforte non si apre
 	restart  chan struct{} // segnala a runClient di riavviare il servizio
 
+	loops sync.WaitGroup // cicli in background avviati da run (i test li aspettano prima di pulire)
+
 	// chiusura automatica (autoclose.go)
 	lastActivity  time.Time // ultima modifica locale vista dalla scansione (o apertura, o "Rimanda")
 	autoCloseErr  string    // motivo dell'ultima chiusura automatica non riuscita
@@ -1999,9 +2001,10 @@ func (c *Client) SetWorkDir(dir string) error {
 }
 
 func (c *Client) run(ctx context.Context) {
-	go c.pullLoop(ctx)
-	go c.pushLoop(ctx)
-	go c.scanLoop(ctx)
+	for _, loop := range []func(context.Context){c.pullLoop, c.pushLoop, c.scanLoop} {
+		c.loops.Add(1)
+		go func() { defer c.loops.Done(); loop(ctx) }()
+	}
 	c.mu.Lock()
 	if c.st.Open {
 		c.log.Print(T("La cassaforte era rimasta aperta (riavvio?): apri con la password per riprendere e poi chiudi"))

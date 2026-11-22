@@ -84,7 +84,11 @@ func (env *testEnv) newClient(name string) *Client {
 	if err := c.Pair(env.pairCode(name), "", name); err != nil {
 		env.t.Fatal(err)
 	}
-	c.run(env.ctx)
+	// registrata dopo TempDir, quindi eseguita prima della sua pulizia: i cicli del client
+	// non devono scrivere nella cartella mentre il test la cancella
+	ctx, cancel := context.WithCancel(env.ctx)
+	env.t.Cleanup(func() { cancel(); c.loops.Wait() })
+	c.run(ctx)
 	return c
 }
 
