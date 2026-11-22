@@ -66,6 +66,8 @@ EOF
 
 client_uninstall() {
   systemctl --user disable --now encluca.service 2>/dev/null || true
+  pkill -x -u "$(id -u)" encluca 2>/dev/null || true # anche l'icona nella barra (encluca tray)
+  rm -f "$HOME/.config/autostart/encluca-tray.desktop"
   rm -f "$HOME/.config/systemd/user/encluca.service" "$HOME/.local/bin/encluca" \
         "$HOME/.local/share/applications/encluca.desktop" \
         "$HOME/.local/share/icons/hicolor/scalable/apps/encluca.svg" \

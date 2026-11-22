@@ -71,6 +71,10 @@ type clientConfig struct {
 	// soglie degli avvisi in ore (nil = predefinita, 0 = avviso disattivato): vedi alerts.go
 	AlertOfflineHours *int `json:"alertOfflineHours,omitempty"`
 	AlertBackupHours  *int `json:"alertBackupHours,omitempty"`
+	// CloseOnLock: chiusura al blocco dello schermo o alla sospensione (nil = attiva)
+	CloseOnLock *bool `json:"closeOnLock,omitempty"`
+	// TrayAutostart: l'avvio automatico dell'icona è già stato creato (non si ricrea)
+	TrayAutostart bool `json:"trayAutostart,omitempty"`
 }
 
 type plainSnap struct {
@@ -1998,7 +2002,7 @@ func (c *Client) Status() map[string]any {
 		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(), "update": c.updateStatusLocked(), "caKnown": c.cfg.CAFingerprint != "",
 		"autoClose": c.autoCloseStatusLocked(time.Now()),
-		"alerts":    c.alertsLocked(time.Now()), "alertCfg": c.alertCfgLocked(),
+		"alerts":    c.alertsLocked(time.Now()), "alertCfg": c.alertCfgLocked(), "closeOnLock": c.closeOnLockLocked(),
 	}
 }
 

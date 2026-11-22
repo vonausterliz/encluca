@@ -309,4 +309,7 @@ var enMessages = map[string]string{
 	"Cassaforte non chiusa":                                                                 "Vault not closed",
 	"l'icona nella barra non è disponibile su macOS":                                        "the tray icon is not available on macOS",
 	"Chiusura della cassaforte prima della sospensione":                                     "Closing the vault before suspend",
+	"Avvio automatico dell'icona non configurato: %v":                                       "Icon autostart not configured: %v",
+	"Icona nella barra non avviata: %v":                                                     "Tray icon not started: %v",
+	"Icona di Encluca nella barra di sistema":                                               "Encluca icon in the system tray",
 }
