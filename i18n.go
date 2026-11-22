@@ -271,4 +271,8 @@ var enMessages = map[string]string{
 	"Cassaforte chiusa automaticamente dopo %d minuti senza modifiche":                                   "Vault closed automatically after %d minutes without changes",
 	"Chiusura automatica rimandata":                                                                      "Automatic close postponed",
 	"indica un numero di minuti tra 0 e 1440":                                                            "enter a number of minutes between 0 and 1440",
+	"controllo dei file aperti non riuscito: %v":                                                         "open files check failed: %v",
+	"e altri %d": "and %d more",
+	"non chiudo: %d file sono aperti in un programma (%s). Chiudili e riprova": "not closing: %d files are open in a program (%s). Close them and try again",
+	"file di blocco (se il programma è già chiuso, eliminalo)":                 "lock file (if the program is already closed, delete it)",
 }

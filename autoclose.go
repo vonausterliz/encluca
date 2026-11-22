@@ -13,6 +13,8 @@ const (
 	autoCloseMax     = 1440
 	autoCloseWarn    = 2 * time.Minute
 	autoCloseRetry   = 5 * time.Minute
+	// con file aperti si ritenta presto: la chiusura riesce appena l'utente li chiude
+	autoCloseRetryInUse = time.Minute
 )
 
 // errCloseBusy: un'altra apertura o chiusura è già in corso. Il testo si traduce al momento
@@ -49,6 +51,10 @@ func (c *Client) autoCloseStatusLocked(now time.Time) autoCloseStatus {
 
 // autoCloseRetryFor è l'attesa prima di un nuovo tentativo dopo una chiusura bloccata.
 func (c *Client) autoCloseRetryFor(err error) time.Duration {
+	var iu *inUseError
+	if errors.As(err, &iu) {
+		return autoCloseRetryInUse
+	}
 	return autoCloseRetry
 }
 

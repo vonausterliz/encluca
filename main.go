@@ -270,6 +270,11 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 				return
 			}
 			res, err := fn(r)
+			var iu *inUseError
+			if errors.As(err, &iu) {
+				writeJSON(w, http.StatusConflict, map[string]any{"error": err.Error(), "inUse": iu.Files})
+				return
+			}
 			if err != nil {
 				writeErr(w, http.StatusBadRequest, err.Error())
 				return

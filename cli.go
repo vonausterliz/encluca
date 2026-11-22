@@ -102,8 +102,9 @@ func (cc *cliConn) call(path string, body any, out any) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		var e struct {
-			Error  string `json:"error"`
-			Reload bool   `json:"reload"`
+			Error  string      `json:"error"`
+			Reload bool        `json:"reload"`
+			InUse  []inUseFile `json:"inUse"`
 		}
 		json.Unmarshal(raw, &e)
 		if e.Reload {
@@ -111,6 +112,16 @@ func (cc *cliConn) call(path string, body any, out any) error {
 		}
 		if e.Error == "" {
 			e.Error = resp.Status
+		}
+		for _, f := range e.InUse {
+			switch {
+			case f.Lock:
+				e.Error += "\n  " + f.Path + " — " + T("file di blocco (se il programma è già chiuso, eliminalo)")
+			case f.Proc != "":
+				e.Error += "\n  " + f.Path + " — " + f.Proc
+			default:
+				e.Error += "\n  " + f.Path
+			}
 		}
 		return errors.New(e.Error)
 	}

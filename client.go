@@ -1814,6 +1814,23 @@ func (c *Client) Close() error {
 		c.mu.Unlock()
 		return errCloseBusy
 	}
+	// un programma con un file aperto perderebbe le modifiche non salvate (vedi inuse.go)
+	work := c.cfg.WorkDir
+	c.mu.Unlock()
+	if files, err := filesInUse(work); err != nil {
+		c.log.Printf(T("controllo dei file aperti non riuscito: %v"), err)
+	} else if len(files) > 0 {
+		return &inUseError{Files: files}
+	}
+	c.mu.Lock()
+	if c.cip == nil {
+		c.mu.Unlock()
+		return nil // chiusa nel frattempo
+	}
+	if c.busy != "" {
+		c.mu.Unlock()
+		return errCloseBusy
+	}
 	c.busy = "chiusura"
 	if _, err := c.scanLocked(true); err != nil {
 		c.busy = ""
