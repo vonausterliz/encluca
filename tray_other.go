@@ -2,9 +2,12 @@
 
 package main
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
-func runTray(dataDir string) error {
+func runTray(ctx context.Context, dataDir string) error {
 	fmt.Println(T("l'icona nella barra non è disponibile su macOS"))
 	return nil
 }

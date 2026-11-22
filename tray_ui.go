@@ -15,13 +15,15 @@ import (
 )
 
 // runTray avvia l'icona nella barra. Esce subito (senza errore) se un'altra istanza è attiva.
-func runTray(dataDir string) error {
+func runTray(ctx context.Context, dataDir string) error {
 	release, ok := acquireTrayLock(dataDir)
 	if !ok {
 		return nil
 	}
 	defer release()
 	t := &trayApp{api: &trayAPI{dir: dataDir}}
+	// SIGTERM/Ctrl-C (fine della sessione): main li intercetta per il servizio, qui si esce
+	go func() { <-ctx.Done(); systray.Quit() }()
 	systray.Run(t.ready, func() {})
 	if t.relaunch {
 		release()
