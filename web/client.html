@@ -26,6 +26,14 @@ ul.alerts li:last-child{border-bottom:0}
 .ren .old b{color:var(--orange);font-weight:500}
 .ren input{flex:1 1 240px}
 .ren .msg{margin-top:6px;font-size:13px}
+.acwarn{border:1px solid var(--yellow);border-radius:var(--r);padding:10px 12px;margin:0 0 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;color:var(--fg1)}
+dialog.inuse{background:var(--bg2);color:var(--fg2);border:0;border-radius:var(--r);padding:0;width:calc(100% - 32px);max-width:560px;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+dialog.inuse::backdrop{background:rgba(0,0,0,.6)}
+dialog.inuse h2{margin:0;font-size:16px;font-weight:500;color:var(--fg1)}
+dialog.inuse p{margin:0}
+dialog.inuse ul{margin:12px 0 16px;padding-left:18px;max-height:40vh;overflow:auto;overflow-wrap:anywhere;color:var(--fg1)}
+dialog.inuse li{margin:4px 0}
+dialog.inuse li small{color:var(--mute)}
 @media (max-width:600px){ .door .card-body{grid-template-columns:1fr} .dial{width:72px;height:72px} }
 </style>
 </head>
@@ -73,6 +81,7 @@ ul.alerts li:last-child{border-bottom:0}
         <div>
           <h3 id="doorTitle">Cassaforte chiusa</h3>
           <p id="doorText"></p>
+          <div class="acwarn hidden" id="acWarn" role="status"><span id="acWarnText"></span><button class="primary small" id="acPostpone">Rimanda</button></div>
           <div class="row" id="closedCtl">
             <input id="pw" type="password" placeholder="Password della cassaforte" autocomplete="current-password">
             <input id="pw2" type="password" placeholder="Ripeti la password" class="hidden" autocomplete="new-password">
@@ -87,6 +96,16 @@ ul.alerts li:last-child{border-bottom:0}
         </div>
       </div>
     </div>
+
+    <!-- chiusura bloccata da file aperti in un programma -->
+    <dialog class="inuse" id="inUseDlg" aria-labelledby="inUseTitle">
+      <div class="card-header"><h2 id="inUseTitle">Chiudi prima questi file</h2></div>
+      <div class="card-body">
+        <p>Sono aperti in un programma. Salvali e chiudili, poi riprova. Finché sono aperti la cassaforte non si chiude.</p>
+        <ul id="inUseList"></ul>
+        <div class="row"><button class="primary" id="inUseRetry">Riprova</button><button class="ghost" id="inUseFolder">Apri cartella</button><button class="ghost" id="inUseCancel">Annulla</button></div>
+      </div>
+    </dialog>
 
     <div class="grid2 hidden" id="panels" style="margin-bottom:16px">
       <div class="card">
@@ -129,6 +148,9 @@ ul.alerts li:last-child{border-bottom:0}
         <label class="check" style="margin-top:20px"><input type="checkbox" id="auEnable"> Aggiornamenti automatici</label>
         <div id="auInfo" style="color:var(--fg1);margin-top:6px;font-size:13px"></div>
         <div id="vaultSettings">
+        <label for="acMin">Chiudi la cassaforte dopo (minuti senza modifiche, 0 = mai)</label>
+        <div class="row"><input id="acMin" type="number" min="0" max="1440" step="1" style="width:120px"><button id="acBtn" class="primary">Salva</button></div>
+        <div style="color:var(--fg1);margin-top:6px;font-size:13px">Prima della chiusura salva i file aperti nei programmi: ciò che non è salvato va perso.</div>
         <label for="workDir">Cartella in cui aprire la cassaforte</label>
         <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
         <label>NAS collegato</label>
@@ -189,6 +211,17 @@ const EN = {
  'Aggiornamenti automatici':'Automatic updates','Versione installata: {v}':'Installed version: {v}','Versione disponibile: {v}':'Available version: {v}',
  'Si installa alla chiusura della cassaforte':'It will be installed when the vault is closed','Ultimo controllo: {t}':'Last check: {t}','mai':'never',
  'Si installano solo rilasci firmati e solo a cassaforte chiusa.':'Only signed releases are installed, and only while the vault is closed.',
+ // chiusura automatica e file in uso
+ 'Rimanda':'Postpone','Chiudi prima questi file':'Close these files first',
+ 'Sono aperti in un programma. Salvali e chiudili, poi riprova. Finché sono aperti la cassaforte non si chiude.':'They are open in a program. Save and close them, then try again. While they are open the vault will not close.',
+ 'Riprova':'Try again','Apri cartella':'Open folder','Annulla':'Cancel',
+ 'Chiudi la cassaforte dopo (minuti senza modifiche, 0 = mai)':'Close the vault after (minutes without changes, 0 = never)',
+ 'Prima della chiusura salva i file aperti nei programmi: ciò che non è salvato va perso.':'Before it closes, save the files open in your programs: anything unsaved is lost.',
+ 'Si chiude da sola dopo {n} minuti senza modifiche.':'It closes by itself after {n} minutes without changes.',
+ 'La cassaforte si chiude da sola alle {h} perché non ci sono modifiche.':'The vault will close by itself at {h} because there are no changes.',
+ 'Chiusura automatica non riuscita: {e}':'Automatic close failed: {e}',
+ 'file di blocco: se il programma è già chiuso, è rimasto da un\'interruzione; eliminalo dalla cartella':'lock file: if the program is already closed, it was left behind by an interruption; delete it from the folder',
+ 'indica un numero di minuti tra 0 e 1440':'enter a number of minutes between 0 and 1440',
 };
 let S = null, forcePair = false;
 const UI_TOKEN = document.querySelector('meta[name="encluca-token"]').content;
@@ -197,7 +230,7 @@ async function api(path, body){
   const r = await fetch(path, body === undefined ? {headers:h} : {method:'POST', headers:{...h,'Content-Type':'application/json','X-Encluca':'1'}, body:JSON.stringify(body)});
   const j = await r.json().catch(()=>({}));
   if(r.status === 403 && j.reload){ location.reload(); }
-  if(!r.ok) throw new Error(j.error || (t('errore') + ' ' + r.status));
+  if(!r.ok){ const e = new Error(j.error || (t('errore') + ' ' + r.status)); e.inUse = j.inUse; throw e; }
   return j;
 }
 function when(x){ if(!x || x.startsWith('0001')) return t('mai'); const d=new Date(x); const s=(Date.now()-d)/1000;
@@ -243,6 +276,7 @@ function render(){
     $('doorTitle').textContent = t('Cassaforte aperta');
     $('doorText').innerHTML = t('I file sono in chiaro in <code></code>. Ogni modifica viene cifrata e inviata al NAS. Chiudila quando hai finito.');
     $('doorText').querySelector('code').textContent = s.workDir;
+    if(s.autoClose && s.autoClose.minutes > 0) $('doorText').append(' ' + t('Si chiude da sola dopo {n} minuti senza modifiche.', {n:s.autoClose.minutes}));
   } else if(s.staleOpen){
     dc.className='chip wait'; dc.textContent=t('Rimasta aperta');
     $('doorTitle').textContent = t('Cassaforte rimasta aperta');
@@ -259,6 +293,10 @@ function render(){
     $('doorText').textContent = t('Sul disco ci sono solo dati cifrati. La sincronizzazione con il NAS continua anche a cassaforte chiusa.');
     $('openBtn').textContent = t('Apri');
   }
+  const ac = s.autoClose || {};
+  $('acWarn').classList.toggle('hidden', !(s.open && ac.warn));
+  if(s.open && ac.warn) $('acWarnText').textContent = t('La cassaforte si chiude da sola alle {h} perché non ci sono modifiche.', {h:new Date(ac.closeAt).toLocaleTimeString(LOCALE(), {hour:'2-digit', minute:'2-digit'})});
+  if(document.activeElement !== $('acMin') && ac.minutes !== undefined) $('acMin').value = ac.minutes;
   if(s.busy) $('doorMsg').textContent = s.busy === 'apertura' ? t('Decifratura in corso…') : t('Cifratura e chiusura in corso…');
 
   $('sNas').innerHTML = s.paired ? (s.online ? chip('ok',t('Raggiungibile')) : chip('ko',t('Non raggiungibile'))) : chip('wait',t('Non collegato'));
@@ -274,6 +312,7 @@ function render(){
   if(s.deferredConflicts) items.push(['', t('{n} conflitti da risolvere: apri la cassaforte', {n:s.deferredConflicts})]);
   for(const c of (s.conflicts||[])) items.push(['', t('Conflitto: la tua versione è salvata come “{f}”', {f:c})]);
   for(const p of (s.problems||[])) items.push(['warn-text', p]);
+  if(s.open && ac.error) items.push(['warn-text', t('Chiusura automatica non riuscita: {e}', {e:ac.error})]);
   $('alerts').innerHTML = '';
   if(!items.length && !(s.renames||[]).length && !s.massDelete && !s.massRecvDelete){ const li=document.createElement('li'); li.className='empty'; li.textContent=t('Nessun avviso.'); $('alerts').append(li); }
   for(const [cls, txt] of items){ const li=document.createElement('li'); if(cls) li.className=cls; li.textContent=txt; $('alerts').append(li); }
@@ -331,9 +370,31 @@ $('openBtn').onclick = async () => {
   try{ await api(creating ? '/api/create' : '/api/open', {Password:$('pw').value}); $('pw').value=''; $('pw2').value=''; updMeter(); $('doorMsg').textContent=''; }
   catch(e){ $('doorMsg').textContent=e.message; } busy($('openBtn'),false); refresh(); };
 $('pw').addEventListener('keydown', e => { if(e.key==='Enter' && $('pw2').classList.contains('hidden')) $('openBtn').click(); });
-$('closeBtn').onclick = async () => { busy($('closeBtn'),true); $('doorMsg').textContent=t('Chiusura…');
+async function doClose(){ busy($('closeBtn'),true); $('doorMsg').textContent=t('Chiusura…');
   try{ await api('/api/close',{}); $('doorMsg').textContent=t('Chiusa. La cartella in chiaro è stata cancellata.'); }
-  catch(e){ $('doorMsg').textContent=e.message; } busy($('closeBtn'),false); refresh(); };
+  catch(e){ if(e.inUse && e.inUse.length){ $('doorMsg').textContent=''; showInUse(e.inUse); } else $('doorMsg').textContent=e.message; }
+  busy($('closeBtn'),false); refresh(); }
+// elenco dei file che impediscono la chiusura: l'utente li chiude e riprova (non si forza)
+function showInUse(list){
+  const ul = $('inUseList'); ul.innerHTML = '';
+  for(const f of list){
+    const li = document.createElement('li'); li.textContent = f.path;
+    const how = f.lock ? t('file di blocco: se il programma è già chiuso, è rimasto da un\'interruzione; eliminalo dalla cartella') : f.proc;
+    if(how){ const sm = document.createElement('small'); sm.textContent = ' — ' + how; li.append(sm); }
+    ul.append(li);
+  }
+  if(!$('inUseDlg').open) $('inUseDlg').showModal();
+}
+$('closeBtn').onclick = doClose;
+$('inUseRetry').onclick = () => { $('inUseDlg').close(); doClose(); };
+$('inUseFolder').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
+$('inUseCancel').onclick = () => $('inUseDlg').close();
+$('acPostpone').onclick = () => api('/api/autoclose/postpone',{}).then(refresh).catch(e => $('doorMsg').textContent=e.message);
+$('acBtn').onclick = () => {
+  const n = Number($('acMin').value);
+  if($('acMin').value === '' || !Number.isInteger(n) || n < 0 || n > 1440){ $('setMsg').textContent = t('indica un numero di minuti tra 0 e 1440'); return; }
+  api('/api/autoclose',{Minutes:n}).then(()=>{ $('setMsg').textContent=t('Salvato.'); refresh(); }).catch(e=>$('setMsg').textContent=e.message);
+};
 $('folderBtn').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
 $('syncBtn').onclick = async () => {
   const btn = $('syncBtn'), lbl = $('syncLbl'); btn.disabled = true; btn.classList.add('spinning'); lbl.textContent = t('Sincronizzazione…');

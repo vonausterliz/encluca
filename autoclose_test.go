@@ -212,3 +212,20 @@ func TestSetAutoCloseValidates(t *testing.T) {
 		t.Fatalf("dopo il riavvio minuti = %d", m)
 	}
 }
+
+func TestAutoCloseAPI(t *testing.T) {
+	c := newBareClient(t)
+	if code, out := apiCall(t, c, "/api/autoclose", map[string]any{"Minutes": 45}); code != 200 {
+		t.Fatalf("impostazione: %d %v", code, out)
+	}
+	_, st := apiCall(t, c, "/api/status", nil)
+	if m := st["autoClose"].(map[string]any)["minutes"]; m != 45.0 {
+		t.Fatalf("minuti nello stato: %v", m)
+	}
+	if code, _ := apiCall(t, c, "/api/autoclose", map[string]any{"Minutes": 5000}); code != 400 {
+		t.Fatalf("5000 minuti accettati: %d", code)
+	}
+	if code, out := apiCall(t, c, "/api/autoclose/postpone", map[string]any{}); code != 200 {
+		t.Fatalf("rimando: %d %v", code, out)
+	}
+}
