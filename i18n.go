@@ -266,4 +266,9 @@ var enMessages = map[string]string{
 	"aggiornamento automatico non disponibile su questa installazione":                                   "automatic update not available on this installation",
 	"Controllo delle nuove versioni non riuscito: %v":                                                    "New version check failed: %v",
 	"Nuova versione disponibile: %s (aggiorna da TrueNAS: Apps → encluca → Stop, poi Start)":             "New version available: %s (update from TrueNAS: Apps → encluca → Stop, then Start)",
+	"operazione in corso: riprova tra qualche secondo":                                                   "operation in progress: try again in a few seconds",
+	"Chiusura automatica non riuscita: %v":                                                               "Automatic close failed: %v",
+	"Cassaforte chiusa automaticamente dopo %d minuti senza modifiche":                                   "Vault closed automatically after %d minutes without changes",
+	"Chiusura automatica rimandata":                                                                      "Automatic close postponed",
+	"indica un numero di minuti tra 0 e 1440":                                                            "enter a number of minutes between 0 and 1440",
 }

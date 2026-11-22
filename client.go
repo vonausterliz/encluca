@@ -66,6 +66,8 @@ type clientConfig struct {
 	AutoUpdate  *bool  `json:"autoUpdate,omitempty"` // nil = attivo (config 0.1.x)
 	// CAFingerprint: impronta della CA del NAS, ricevuta sul canale già verificato (vedi ca.go)
 	CAFingerprint string `json:"caFingerprint,omitempty"`
+	// AutoCloseMin: minuti senza modifiche prima della chiusura automatica (nil = 30, 0 = mai)
+	AutoCloseMin *int `json:"autoCloseMin,omitempty"`
 }
 
 type plainSnap struct {
@@ -143,6 +145,11 @@ type Client struct {
 	upd      *updater      // nil se l'aggiornamento automatico non è disponibile
 	updating bool          // installazione in corso: la cassaforte non si apre
 	restart  chan struct{} // segnala a runClient di riavviare il servizio
+
+	// chiusura automatica (autoclose.go)
+	lastActivity  time.Time // ultima modifica locale vista dalla scansione (o apertura, o "Rimanda")
+	autoCloseErr  string    // motivo dell'ultima chiusura automatica non riuscita
+	autoCloseNext time.Time // prima di questo istante non si ritenta
 }
 
 func (c *Client) cfgPath() string   { return filepath.Join(c.dir, "config.json") }
@@ -1444,6 +1451,7 @@ func (c *Client) scanLoop(ctx context.Context) {
 		if c.cip != nil && c.st.Open && c.busy == "" {
 			changed, _ = c.scanLocked(false)
 			if changed {
+				c.lastActivity = time.Now()
 				c.saveState()
 			}
 		}
@@ -1451,6 +1459,7 @@ func (c *Client) scanLoop(ctx context.Context) {
 		if changed {
 			c.kick()
 		}
+		c.autoCloseTick(time.Now())
 	}
 }
 
@@ -1776,6 +1785,7 @@ func (c *Client) Open(password string) error {
 		}
 	}
 	c.st.Open = true
+	c.noteActivityLocked(time.Now())
 	c.saveState()
 	if recovering {
 		c.log.Printf(T("Cassaforte riaperta (ripresa dopo un'interruzione): %s"), work)
@@ -1799,6 +1809,10 @@ func (c *Client) Close() error {
 			return errors.New(T("la cassaforte era rimasta aperta: inserisci la password e premi Apri, poi chiudi"))
 		}
 		return nil
+	}
+	if c.busy != "" {
+		c.mu.Unlock()
+		return errCloseBusy
 	}
 	c.busy = "chiusura"
 	if _, err := c.scanLocked(true); err != nil {
@@ -1927,6 +1941,7 @@ func (c *Client) Status() map[string]any {
 		"files": files, "pending": pending, "deferredConflicts": deferred, "conflicts": c.conflicts,
 		"problems": probs, "renames": renames, "lang": getLang(), "sendProgress": c.sendProg.snapshot(), "recvProgress": c.recvProg.snapshot(), "massDelete": c.massDel, "massRecvDelete": c.massRecvDel, "busy": c.busy, "vaultKnown": metaErr == nil,
 		"log": c.log.Lines(), "update": c.updateStatusLocked(), "caKnown": c.cfg.CAFingerprint != "",
+		"autoClose": c.autoCloseStatusLocked(time.Now()),
 	}
 }
 
