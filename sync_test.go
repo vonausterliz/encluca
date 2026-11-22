@@ -26,8 +26,10 @@ type testEnv struct {
 	down atomic.Bool
 	// notFound: percorso a cui l'hub risponde 404 (simula un hub di una versione precedente)
 	notFound string
-	ctx      context.Context
-	cancel   context.CancelFunc
+	// status: se diverso da 0, l'hub risponde sempre con questo codice (es. 426 = client troppo vecchio)
+	status atomic.Int32
+	ctx    context.Context
+	cancel context.CancelFunc
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -46,6 +48,11 @@ func newTestEnv(t *testing.T) *testEnv {
 				conn.Close()
 				return
 			}
+		}
+		if code := int(env.status.Load()); code != 0 {
+			w.Header().Set("X-Encluca-Proto", "2")
+			writeErr(w, code, "il NAS richiede una versione più recente")
+			return
 		}
 		if env.notFound != "" && r.URL.Path == env.notFound {
 			http.NotFound(w, r)

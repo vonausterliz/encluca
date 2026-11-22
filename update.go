@@ -452,8 +452,14 @@ func (u *updater) check(ctx context.Context) error {
 	v, err := u.prepare(ctx)
 	u.mu.Lock()
 	u.st.LastCheck = time.Now()
+	// VerifyFailed cambia solo con un esito che riguarda la firma: un errore di rete non
+	// dice nulla e l'avviso deve restare (altrimenti sparirebbe e ricomparirebbe)
 	var ve *verifyError
-	u.st.VerifyFailed = errors.As(err, &ve)
+	if err == nil {
+		u.st.VerifyFailed = false
+	} else if errors.As(err, &ve) {
+		u.st.VerifyFailed = true
+	}
 	if err != nil {
 		u.st.Error = err.Error()
 	} else {
@@ -498,7 +504,9 @@ func (u *updater) prepare(ctx context.Context) (string, error) {
 	}()
 	sumsURL, sigURL := assets["SHA256SUMS"], assets["SHA256SUMS.sig"]
 	if sumsURL == "" || sigURL == "" {
-		return "", newVerifyError(T("il rilascio non è firmato (mancano SHA256SUMS o SHA256SUMS.sig)"))
+		// può essere una release appena creata, con i file ancora in caricamento: non è una
+		// firma non valida (e senza firma non si installa comunque nulla)
+		return "", errors.New(T("il rilascio non è firmato (mancano SHA256SUMS o SHA256SUMS.sig)"))
 	}
 	sums, err := readLimited(ctx, u.hc, sumsURL, maxSumsSize)
 	if err != nil {
@@ -598,7 +606,9 @@ func (u *updater) failInstall(err error) {
 	var ve *verifyError
 	u.mu.Lock()
 	u.st.Error = err.Error()
-	u.st.VerifyFailed = errors.As(err, &ve)
+	if errors.As(err, &ve) {
+		u.st.VerifyFailed = true
+	}
 	u.mu.Unlock()
 }
 

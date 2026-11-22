@@ -151,6 +151,7 @@ type Client struct {
 
 	// avvisi (alerts.go)
 	offlineSince time.Time   // primo tentativo fallito dell'interruzione in corso (zero se raggiungibile)
+	incompat     string      // il NAS risponde ma le versioni non sono compatibili (motivo)
 	backup       *backupInfo // stato del backup Drive dal NAS (nil = sconosciuto o hub senza l'API)
 	updatedTo    string      // versione installata dall'ultimo aggiornamento automatico
 	updatedAt    time.Time
@@ -354,7 +355,7 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 		if m.Error == "" {
 			m.Error = T("il NAS richiede una versione più recente di encluca: aggiorna questo computer")
 		}
-		c.setOnline(false, m.Error)
+		c.setIncompatible(m.Error)
 		return nil, &httpStatusErr{resp.StatusCode, b}
 	}
 	if resp.StatusCode == http.StatusUnauthorized {
@@ -372,7 +373,7 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 	if hp < protoVersion {
 		// hub più vecchio della 0.2.2: non conosce le cartelle vuote e le salverebbe come file
 		resp.Body.Close()
-		c.setOnline(false, T("il NAS usa una versione di encluca troppo vecchia: aggiorna l'hub alla 0.2.2 o successiva"))
+		c.setIncompatible(T("il NAS usa una versione di encluca troppo vecchia: aggiorna l'hub alla 0.2.2 o successiva"))
 		return nil, errors.New(T("NAS da aggiornare"))
 	}
 	c.setOnline(true, "")
@@ -396,6 +397,7 @@ func (c *Client) setOnline(on bool, msg string) {
 	}
 	c.online = on
 	if on {
+		c.incompat = ""
 		c.offlineSince = time.Time{}
 	} else if c.offlineSince.IsZero() {
 		c.offlineSince = time.Now()
@@ -405,6 +407,17 @@ func (c *Client) setOnline(on bool, msg string) {
 	} else if msg != "" {
 		c.lastErr = msg
 	}
+}
+
+// setIncompatible: il NAS risponde ma le versioni non sono compatibili. Non si sincronizza,
+// ma non è "il NAS non risponde": avviso dedicato con il motivo.
+func (c *Client) setIncompatible(msg string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.online = false
+	c.offlineSince = time.Time{}
+	c.incompat = msg
+	c.lastErr = msg
 }
 
 func (c *Client) getJSON(ctx context.Context, p string, q url.Values, out any) error {

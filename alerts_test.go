@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/tls"
 	"errors"
 	"net/http"
@@ -243,5 +245,81 @@ func TestAlertsAPI(t *testing.T) {
 	}
 	if code, _ := apiCall(t, c, "/api/alerts", map[string]any{"Offline": -1, "Backup": 24}); code != 400 {
 		t.Fatalf("soglia negativa accettata: %d", code)
+	}
+}
+
+// Il NAS risponde ma rifiuta questo client (426): non è "il NAS non risponde".
+func TestAlertIncompatibleNotOffline(t *testing.T) {
+	env := newTestEnv(t)
+	c := env.newClient("PC1")
+	env.status.Store(426)
+	c.SyncNow()
+	waitFor(t, "rifiuto del NAS", func() bool { _, ok := alertIDs(c)["incompatible"]; return ok })
+	c.mu.Lock()
+	since := c.offlineSince
+	c.offlineSince = time.Time{}
+	c.mu.Unlock()
+	if !since.IsZero() {
+		t.Fatal("conteggio 'NAS non risponde' avviato con il NAS che risponde 426")
+	}
+	env.status.Store(0)
+	c.SyncNow()
+	waitFor(t, "avviso incompatibile risolto", func() bool { _, ok := alertIDs(c)["incompatible"]; return !ok })
+}
+
+// Un errore di rete non dice nulla sulla firma: l'avviso "firma non valida" resta.
+func TestVerifyFailedStickyOnNetworkError(t *testing.T) {
+	u, f, _ := newTestUpdater(t, "0.2.0")
+	_, other, _ := ed25519.GenerateKey(rand.Reader)
+	f.release(t, other, "v0.2.1", "0.2.1", "0.2.1")
+	u.check(t.Context())
+	if !u.state().VerifyFailed {
+		t.Fatal("firma non valida non segnalata")
+	}
+	f.srv.Close()
+	u.check(t.Context())
+	if !u.state().VerifyFailed {
+		t.Fatal("avviso di firma azzerato da un errore di rete")
+	}
+}
+
+func TestVerifyFailedResetOnSuccess(t *testing.T) {
+	u, f, priv := newTestUpdater(t, "0.2.0")
+	_, other, _ := ed25519.GenerateKey(rand.Reader)
+	f.release(t, other, "v0.2.1", "0.2.1", "0.2.1")
+	u.check(t.Context())
+	f.release(t, priv, "v0.2.1", "0.2.1", "0.2.1")
+	if err := u.check(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if u.state().VerifyFailed {
+		t.Fatal("avviso di firma rimasto dopo un controllo riuscito")
+	}
+}
+
+// Release appena creata, file di firma non ancora caricati: non è un attacco, niente avviso.
+func TestMissingSumsNotVerifyFailure(t *testing.T) {
+	u, f, priv := newTestUpdater(t, "0.2.0")
+	f.release(t, priv, "v0.2.1", "0.2.1", "0.2.1")
+	delete(f.files, "SHA256SUMS.sig")
+	if err := u.check(t.Context()); err == nil {
+		t.Fatal("release senza firma accettata")
+	}
+	if u.state().VerifyFailed {
+		t.Fatal("file di firma mancanti trattati come firma non valida")
+	}
+}
+
+func TestBackupErrorSanitized(t *testing.T) {
+	raw := `Put "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&upload_id=SEGRETO123": dial tcp: lookup www.googleapis.com: no such host` + "\n{\n  \"error\": 1\n}"
+	got := cleanBackupErr(raw)
+	if strings.Contains(got, "SEGRETO123") || strings.Contains(got, "\n") || strings.Contains(got, "upload_id") {
+		t.Fatalf("errore non ripulito: %q", got)
+	}
+	if !strings.Contains(got, "www.googleapis.com") || !strings.Contains(got, "no such host") {
+		t.Fatalf("errore ripulito troppo: %q", got)
+	}
+	if long := cleanBackupErr(strings.Repeat("x", 500)); len([]rune(long)) > 201 {
+		t.Fatalf("errore non troncato: %d", len(long))
 	}
 }

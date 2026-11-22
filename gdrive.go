@@ -145,7 +145,7 @@ func (g *GDrive) deviceStatus() backupInfo {
 	c := g.cfg()
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return backupInfo{Enabled: c.RefreshToken != "", LastOK: g.lastOK, Error: g.lastErr}
+	return backupInfo{Enabled: c.RefreshToken != "", LastOK: g.lastOK, Error: cleanBackupErr(g.lastErr)}
 }
 
 func (g *GDrive) loop(ctx context.Context) {

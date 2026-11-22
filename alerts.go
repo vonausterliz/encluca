@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"regexp"
+	"strings"
 	"time"
 )
 
@@ -63,6 +66,9 @@ func (c *Client) alertsLocked(now time.Time) []alert {
 	}
 	if c.cip == nil && c.st.Open {
 		add("staleOpen", "warn", T("La cassaforte è rimasta aperta dopo un riavvio: aprila con la password e poi chiudila"), time.Time{})
+	}
+	if c.incompat != "" {
+		add("incompatible", "warn", c.incompat, time.Time{})
 	}
 	if h := hoursOr(c.cfg.AlertOfflineHours, alertOfflineDefault); h > 0 && c.cfg.Token != "" && !c.revoked && !c.online && !c.offlineSince.IsZero() &&
 		now.Sub(c.offlineSince) >= time.Duration(h)*time.Hour {
@@ -161,4 +167,24 @@ func (c *Client) SetAlerts(offlineHours, backupHours int) error {
 	defer c.mu.Unlock()
 	c.cfg.AlertOfflineHours, c.cfg.AlertBackupHours = &offlineHours, &backupHours
 	return saveJSON(c.cfgPath(), &c.cfg)
+}
+
+var urlRe = regexp.MustCompile(`https?://[^\s"/]+[^\s"]*`)
+
+// cleanBackupErr riduce l'errore del backup a una riga breve per avvisi e notifiche: gli
+// indirizzi restano solo come host (un URL di caricamento di Drive vale come credenziale).
+func cleanBackupErr(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	s = urlRe.ReplaceAllStringFunc(s, func(u string) string {
+		if p, err := url.Parse(u); err == nil && p.Host != "" {
+			return p.Scheme + "://" + p.Host
+		}
+		return "…"
+	})
+	if r := []rune(strings.TrimSpace(s)); len(r) > 200 {
+		return string(r[:200]) + "…"
+	}
+	return strings.TrimSpace(s)
 }
