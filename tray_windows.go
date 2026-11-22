@@ -46,6 +46,7 @@ var (
 	pTranslateMsg    = user32.NewProc("TranslateMessage")
 	pDispatchMsg     = user32.NewProc("DispatchMessageW")
 	pWTSRegister     = wtsapi32.NewProc("WTSRegisterSessionNotification")
+	pGetModuleHandle = windows.NewLazySystemDLL("kernel32.dll").NewProc("GetModuleHandleW")
 )
 
 type wndClassEx struct {
@@ -89,12 +90,13 @@ func watchLock(ctx context.Context, onLock func()) error {
 		r, _, _ := pDefWindowProc.Call(hwnd, msg, wp, lp)
 		return r
 	})
-	wc := wndClassEx{WndProc: proc, ClassName: cls}
+	inst, _, _ := pGetModuleHandle.Call(0)
+	wc := wndClassEx{WndProc: proc, ClassName: cls, Instance: windows.Handle(inst)}
 	wc.Size = uint32(unsafe.Sizeof(wc))
 	if r, _, err := pRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
 		return err
 	}
-	hwnd, _, err := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(cls)), 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	hwnd, _, err := pCreateWindowEx.Call(0, uintptr(unsafe.Pointer(cls)), uintptr(unsafe.Pointer(cls)), 0, 0, 0, 0, 0, 0, 0, inst, 0)
 	if hwnd == 0 {
 		return err
 	}

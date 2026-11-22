@@ -198,6 +198,7 @@ func runClient(ctx context.Context, dir, uiAddr string) error {
 	if err := writeCLIEndpoint(dir, uiAddr, uiToken); err != nil {
 		c.log.Printf(T("Token per i comandi da terminale non salvato: %v"), err)
 	}
+	trayStartEnabled = true
 	go startTray(c) // dopo il token: il tray lo legge
 	defer os.Remove(cliTokenPath(dir))
 	errc := make(chan error, 1)
@@ -321,6 +322,7 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	mux.HandleFunc("/api/autoupdate", post(func(r *http.Request) (any, error) { return nil, c.SetAutoUpdate(parse(r).On) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
 	mux.HandleFunc("/api/autoclose", post(func(r *http.Request) (any, error) { return nil, c.SetAutoClose(parse(r).Minutes) }))
+	mux.HandleFunc("/api/tray", post(func(r *http.Request) (any, error) { return nil, c.SetTray(parse(r).On) }))
 	mux.HandleFunc("/api/closeonlock", post(func(r *http.Request) (any, error) { return nil, c.SetCloseOnLock(parse(r).On) }))
 	mux.HandleFunc("/api/alerts", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.SetAlerts(b.Offline, b.Backup) }))
 	mux.HandleFunc("/api/autoclose/postpone", post(func(r *http.Request) (any, error) { c.PostponeAutoClose(); return nil, nil }))

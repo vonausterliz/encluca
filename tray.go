@@ -9,8 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,8 +25,9 @@ const (
 // rilegge cli-token.json e riprova una volta.
 type trayAPI struct {
 	dir string
-	ep  cliEndpoint
 	hc  http.Client
+	mu  sync.Mutex // ep è letto e riscritto da poll, menu e blocco schermo in parallelo
+	ep  cliEndpoint
 }
 
 func (a *trayAPI) load() error {
@@ -39,34 +39,46 @@ func (a *trayAPI) load() error {
 	if err := json.Unmarshal(b, &ep); err != nil || ep.Addr == "" || ep.Token == "" {
 		return errors.New(T("file del token non valido: riavvia il servizio encluca client"))
 	}
+	a.mu.Lock()
 	a.ep = ep
+	a.mu.Unlock()
 	return nil
+}
+
+func (a *trayAPI) endpoint() cliEndpoint {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.ep
+}
+
+func (a *trayAPI) forget() {
+	a.mu.Lock()
+	a.ep.Token = ""
+	a.mu.Unlock()
 }
 
 func (a *trayAPI) do(method, path string, out any) error {
 	for attempt := 0; attempt < 2; attempt++ {
-		if a.ep.Token == "" || attempt > 0 {
+		if a.endpoint().Token == "" || attempt > 0 {
 			if err := a.load(); err != nil {
 				return err
 			}
 		}
+		ep := a.endpoint()
 		var body io.Reader
 		if method == http.MethodPost {
 			body = bytes.NewReader([]byte("{}"))
 		}
-		req, err := http.NewRequest(method, "http://"+a.ep.Addr+path, body)
+		req, err := http.NewRequest(method, "http://"+ep.Addr+path, body)
 		if err != nil {
 			return err
 		}
 		req.Header.Set("X-Encluca", "1")
-		req.Header.Set("X-Encluca-Token", a.ep.Token)
+		req.Header.Set("X-Encluca-Token", ep.Token)
 		req.Header.Set("Content-Type", "application/json")
-		if a.hc.Timeout == 0 {
-			a.hc.Timeout = 2 * time.Minute // la chiusura può richiedere tempo (cifratura, invio)
-		}
 		resp, err := a.hc.Do(req)
 		if err != nil {
-			a.ep.Token = "" // servizio fermo o riavviato: alla prossima chiamata si rilegge il token
+			a.forget() // servizio fermo o riavviato: alla prossima chiamata si rilegge il token
 			return err
 		}
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
@@ -100,25 +112,62 @@ func (a *trayAPI) status() (trayStatus, error) {
 
 func (a *trayAPI) post(path string) error { return a.do(http.MethodPost, path, nil) }
 
-// acquireTrayLock garantisce un solo tray per utente: tray.lock contiene il PID del tray
-// attivo. Un file con il PID di un processo terminato (uscita brusca) viene sostituito.
+// acquireTrayLock garantisce un solo tray per utente con un blocco del sistema operativo su
+// tray.lock (flock / LockFileEx): sparisce da solo quando il processo termina, quindi niente
+// file orfani né PID riusati. release è idempotente.
 func acquireTrayLock(dir string) (release func(), ok bool) {
-	p := filepath.Join(dir, "tray.lock")
-	for attempt := 0; attempt < 2; attempt++ {
-		f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-		if err == nil {
-			fmt.Fprint(f, os.Getpid())
-			f.Close()
-			return func() { os.Remove(p) }, true
-		}
-		b, rerr := os.ReadFile(p)
-		pid, perr := strconv.Atoi(strings.TrimSpace(string(b)))
-		if rerr == nil && perr == nil && processAlive(pid) {
-			return nil, false
-		}
-		os.Remove(p)
+	f, err := os.OpenFile(filepath.Join(dir, "tray.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	if err != nil {
+		return nil, false
 	}
-	return nil, false
+	if lockFileExclusive(f) != nil {
+		f.Close()
+		return nil, false
+	}
+	f.Truncate(0)
+	fmt.Fprint(f, os.Getpid()) // solo informativo
+	var once sync.Once
+	return func() { once.Do(func() { f.Close() }) }, true
+}
+
+// trayLog aggiunge una riga a tray.log nella cartella dati (il tray non ha una console).
+func trayLog(dir, format string, a ...any) {
+	p := filepath.Join(dir, "tray.log")
+	if fi, err := os.Stat(p); err == nil && fi.Size() > 1<<20 {
+		os.Rename(p, p+".1")
+	}
+	f, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	fmt.Fprintf(f, "%s %s\n", time.Now().Format("2006-01-02 15:04:05"), fmt.Sprintf(format, a...))
+}
+
+// lockHandler reagisce al blocco dello schermo o alla sospensione: chiude se serve; se il
+// servizio rifiuta (file aperti, eliminazioni in attesa…) non forza e avvisa, al massimo
+// una volta ogni trayRefusalEvery. Serializzato: eventi vicini (blocco + sospensione) non
+// fanno due chiusure in parallelo.
+type lockHandler struct {
+	api    *trayAPI
+	now    func() time.Time
+	notify func(title, body string)
+	mu     sync.Mutex
+	last   time.Time
+}
+
+func (h *lockHandler) handle() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	err := trayLockedClose(h.api)
+	if err == nil {
+		return
+	}
+	if !h.last.IsZero() && h.now().Sub(h.last) < trayRefusalEvery {
+		return
+	}
+	h.last = h.now()
+	h.notify(T("Cassaforte non chiusa"), err.Error())
 }
 
 // trayLockedClose è la reazione al blocco dello schermo o alla sospensione. Restituisce
@@ -129,4 +178,9 @@ func trayLockedClose(api *trayAPI) error {
 		return nil
 	}
 	return api.post("/api/close")
+}
+
+// la chiusura può richiedere tempo (cifratura, invio al NAS)
+func newTrayAPI(dir string) *trayAPI {
+	return &trayAPI{dir: dir, hc: http.Client{Timeout: 2 * time.Minute}}
 }

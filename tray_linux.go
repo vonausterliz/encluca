@@ -17,7 +17,7 @@ func notify(title, body string) error {
 	}
 	obj := conn.Object("org.freedesktop.Notifications", "/org/freedesktop/Notifications")
 	return obj.Call("org.freedesktop.Notifications.Notify", 0, "Encluca", uint32(0), "",
-		title, body, []string{}, map[string]dbus.Variant{}, int32(-1)).Err
+		markupEscape(title), markupEscape(body), []string{}, map[string]dbus.Variant{}, int32(-1)).Err
 }
 
 // watchLock chiama onLock quando lo schermo si blocca o il computer sta per sospendersi.
@@ -35,14 +35,21 @@ func watchLock(ctx context.Context, onLock func()) error {
 		}
 		sess.Signal(ch)
 	}
+	// Sul bus di sistema chiunque può emettere segnali: si accettano solo quelli del vero
+	// logind (il demone DBus risolve il nome, quindi il mittente non si può falsificare) e,
+	// per il blocco, solo quelli della sessione grafica di questo utente.
 	var sys *dbus.Conn
+	var sessPath dbus.ObjectPath
 	if c, err := dbus.ConnectSystemBus(); err == nil {
 		sys = c
 		defer sys.Close()
-		if sys.AddMatchSignal(dbus.WithMatchInterface("org.freedesktop.login1.Session"), dbus.WithMatchMember("Lock")) == nil {
+		sessPath = ownSession(sys)
+		if sessPath != "" && sys.AddMatchSignal(dbus.WithMatchSender("org.freedesktop.login1"), dbus.WithMatchObjectPath(sessPath),
+			dbus.WithMatchInterface("org.freedesktop.login1.Session"), dbus.WithMatchMember("Lock")) == nil {
 			sources++
 		}
-		if sys.AddMatchSignal(dbus.WithMatchInterface("org.freedesktop.login1.Manager"), dbus.WithMatchMember("PrepareForSleep")) == nil {
+		if sys.AddMatchSignal(dbus.WithMatchSender("org.freedesktop.login1"), dbus.WithMatchObjectPath("/org/freedesktop/login1"),
+			dbus.WithMatchInterface("org.freedesktop.login1.Manager"), dbus.WithMatchMember("PrepareForSleep")) == nil {
 			sources++
 		}
 		sys.Signal(ch)
@@ -83,8 +90,14 @@ func watchLock(ctx context.Context, onLock func()) error {
 					onLock()
 				}
 			case "org.freedesktop.login1.Session.Lock":
-				onLock()
+				// la regola di match filtra già; il controllo qui protegge da altre regole sulla stessa connessione
+				if sig.Path == sessPath && fromLogind(sys, sig.Sender) {
+					onLock()
+				}
 			case "org.freedesktop.login1.Manager.PrepareForSleep":
+				if !fromLogind(sys, sig.Sender) {
+					continue
+				}
 				if first {
 					onLock()
 					if inh != nil {
@@ -97,6 +110,44 @@ func watchLock(ctx context.Context, onLock func()) error {
 			}
 		}
 	}
+}
+
+// ownSession: la sessione di questo utente (XDG_SESSION_ID, altrimenti la sessione
+// grafica dell'utente secondo logind: il tray può girare in un'unità systemd fuori sessione).
+func ownSession(sys *dbus.Conn) dbus.ObjectPath {
+	mgr := sys.Object("org.freedesktop.login1", "/org/freedesktop/login1")
+	if id := os.Getenv("XDG_SESSION_ID"); id != "" {
+		var p dbus.ObjectPath
+		if mgr.Call("org.freedesktop.login1.Manager.GetSession", 0, id).Store(&p) == nil {
+			return p
+		}
+	}
+	var user dbus.ObjectPath
+	if mgr.Call("org.freedesktop.login1.Manager.GetUser", 0, uint32(os.Getuid())).Store(&user) != nil {
+		return ""
+	}
+	v, err := sys.Object("org.freedesktop.login1", user).GetProperty("org.freedesktop.login1.User.Display")
+	if err != nil {
+		return ""
+	}
+	var disp struct {
+		ID   string
+		Path dbus.ObjectPath
+	}
+	if dbus.Store([]any{v.Value()}, &disp) != nil {
+		return ""
+	}
+	return disp.Path
+}
+
+// fromLogind: il mittente (nome univoco) è il proprietario attuale di org.freedesktop.login1.
+func fromLogind(sys *dbus.Conn, sender string) bool {
+	if sys == nil {
+		return false
+	}
+	var owner string
+	err := sys.BusObject().Call("org.freedesktop.DBus.GetNameOwner", 0, "org.freedesktop.login1").Store(&owner)
+	return err == nil && owner == sender
 }
 
 // detach stacca il processo figlio dalla sessione del padre.

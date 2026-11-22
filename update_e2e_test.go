@@ -73,7 +73,7 @@ func TestUpdateEndToEnd(t *testing.T) {
 	ln.Close()
 	data := filepath.Join(tmp, "data")
 	cmd := exec.Command(exe, "client", "--data", data, "--ui", addr)
-	cmd.Env = append(os.Environ(), "ENCLUCA_UPDATE_API="+srv.URL+"/latest", "HOME="+tmp)
+	cmd.Env = append(os.Environ(), "ENCLUCA_UPDATE_API="+srv.URL+"/latest", "HOME="+tmp, "ENCLUCA_NO_TRAY=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestUpdateEndToEnd(t *testing.T) {
 	}
 	// al riavvio la nuova versione registra l'aggiornamento e pulisce
 	cmd = exec.Command(exe, "client", "--data", data, "--ui", addr)
-	cmd.Env = append(os.Environ(), "ENCLUCA_UPDATE_API="+srv.URL+"/latest", "HOME="+tmp)
+	cmd.Env = append(os.Environ(), "ENCLUCA_UPDATE_API="+srv.URL+"/latest", "HOME="+tmp, "ENCLUCA_NO_TRAY=1")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}

@@ -119,3 +119,26 @@ func TestTrayIcons(t *testing.T) {
 		t.Fatal("icone di stati diversi identiche")
 	}
 }
+
+func TestTrayRelaunchTarget(t *testing.T) {
+	if _, ok := relaunchTarget(trayStatus{Version: Version, Exe: "/x"}, ""); ok {
+		t.Fatal("rilancio con la stessa versione")
+	}
+	if _, ok := relaunchTarget(trayStatus{}, ""); ok {
+		t.Fatal("rilancio senza versione del servizio")
+	}
+	exe, ok := relaunchTarget(trayStatus{Version: "9.9.9", Exe: "/opt/encluca"}, "")
+	if !ok || exe != "/opt/encluca" {
+		t.Fatalf("rilancio verso il binario del servizio: %q %v", exe, ok)
+	}
+	// già rilanciato per questa versione e ancora diverso: niente ciclo
+	if _, ok := relaunchTarget(trayStatus{Version: "9.9.9", Exe: "/opt/encluca"}, "9.9.9"); ok {
+		t.Fatal("secondo rilancio per la stessa versione")
+	}
+}
+
+func TestNotifyMarkupEscaped(t *testing.T) {
+	if got := markupEscape("Q&A <bozza>.odt"); got != "Q&amp;A &lt;bozza&gt;.odt" {
+		t.Fatalf("%q", got)
+	}
+}

@@ -155,7 +155,8 @@ dialog.inuse li small{color:var(--mute)}
         <input id="alOff" type="number" min="0" max="720" step="1" style="width:120px">
         <label for="alBak">Avvisa se il backup su Drive è fermo da (ore, 0 = mai)</label>
         <div class="row"><input id="alBak" type="number" min="0" max="720" step="1" style="width:120px"><button id="alBtn" class="primary">Salva</button></div>
-        <label class="check" style="margin-top:20px"><input type="checkbox" id="colEnable"> Chiudi la cassaforte quando blocco lo schermo o il computer va in sospensione</label>
+        <label class="check" style="margin-top:20px"><input type="checkbox" id="trayEnable"> Mostra l'icona nella barra di sistema (Linux, Windows)</label>
+        <label class="check" style="margin-top:10px"><input type="checkbox" id="colEnable"> Chiudi la cassaforte quando blocco lo schermo o il computer va in sospensione</label>
         <div style="color:var(--fg1);margin-top:6px;font-size:13px">Richiede l'icona nella barra (Linux, Windows).</div>
         <label for="workDir">Cartella in cui aprire la cassaforte</label>
         <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
@@ -232,6 +233,7 @@ const EN = {
  'Avvisa se il NAS non risponde da (ore, 0 = mai)':'Notify if the NAS has not responded for (hours, 0 = never)',
  'Avvisa se il backup su Drive è fermo da (ore, 0 = mai)':'Notify if the Drive backup has been stuck for (hours, 0 = never)',
  'indica un numero di ore tra 0 e 720':'enter a number of hours between 0 and 720',
+ "Mostra l'icona nella barra di sistema (Linux, Windows)":'Show the icon in the system tray (Linux, Windows)',
  'Chiudi la cassaforte quando blocco lo schermo o il computer va in sospensione':'Close the vault when I lock the screen or the computer suspends',
  "Richiede l'icona nella barra (Linux, Windows).":'Requires the tray icon (Linux, Windows).',
 };
@@ -309,6 +311,7 @@ function render(){
   $('acWarn').classList.toggle('hidden', !(s.open && ac.warn));
   if(s.open && ac.warn) $('acWarnText').textContent = t('La cassaforte si chiude da sola alle {h} perché non ci sono modifiche.', {h:new Date(ac.closeAt).toLocaleTimeString(LOCALE(), {hour:'2-digit', minute:'2-digit'})});
   if(document.activeElement !== $('acMin') && ac.minutes !== undefined) $('acMin').value = ac.minutes;
+  if(document.activeElement !== $('trayEnable') && s.tray !== undefined) $('trayEnable').checked = !!s.tray;
   if(document.activeElement !== $('colEnable') && s.closeOnLock !== undefined) $('colEnable').checked = !!s.closeOnLock;
   const al = s.alertCfg || {};
   if(document.activeElement !== $('alOff') && al.offlineHours !== undefined) $('alOff').value = al.offlineHours;
@@ -408,6 +411,7 @@ $('inUseRetry').onclick = () => { $('inUseDlg').close(); doClose(); };
 $('inUseFolder').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
 $('inUseCancel').onclick = () => $('inUseDlg').close();
 $('acPostpone').onclick = () => api('/api/autoclose/postpone',{}).then(refresh).catch(e => $('doorMsg').textContent=e.message);
+$('trayEnable').onchange = () => api('/api/tray', {On: $('trayEnable').checked}).then(refresh).catch(e => { $('setMsg').textContent = e.message; refresh(); });
 $('colEnable').onchange = () => api('/api/closeonlock', {On: $('colEnable').checked}).then(refresh).catch(e => { $('setMsg').textContent = e.message; refresh(); });
 $('alBtn').onclick = () => {
   const ok = v => v !== '' && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 720;

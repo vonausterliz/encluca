@@ -57,3 +57,47 @@ func TestCloseOnLockAPI(t *testing.T) {
 		t.Fatal("API non applicata")
 	}
 }
+
+func TestTrayOffSetting(t *testing.T) {
+	c := newBareClient(t)
+	if v, _ := c.Status()["tray"].(bool); !v {
+		t.Fatal("icona non attiva di predefinito")
+	}
+	if err := c.SetTray(false); err != nil {
+		t.Fatal(err)
+	}
+	c2, _ := newClient(c.dir)
+	if v, _ := c2.Status()["tray"].(bool); v {
+		t.Fatal("icona disattivata non salvata")
+	}
+	if c2.trayWanted() {
+		t.Fatal("il servizio avvierebbe l'icona disattivata")
+	}
+	if code, _ := apiCall(t, c2, "/api/tray", map[string]any{"On": true}); code != 200 || !c2.trayWanted() {
+		t.Fatalf("riattivazione via API: %d", code)
+	}
+}
+
+func TestTrayQuitsWhenOff(t *testing.T) {
+	off := false
+	if !trayShouldQuit(trayStatus{Tray: &off}) {
+		t.Fatal("il tray resta con l'icona disattivata")
+	}
+	if trayShouldQuit(trayStatus{}) {
+		t.Fatal("il tray esce con un servizio che non conosce l'impostazione")
+	}
+}
+
+// I test che avviano il vero "encluca client" non devono lasciare icone sul desktop.
+func TestStartTrayRespectsNoTrayEnv(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("solo Linux")
+	}
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("ENCLUCA_NO_TRAY", "1")
+	c := newBareClient(t)
+	startTray(c)
+	if _, err := os.Stat(filepath.Join(os.Getenv("XDG_CONFIG_HOME"), "autostart", "encluca-tray.desktop")); err == nil {
+		t.Fatal("con ENCLUCA_NO_TRAY il servizio ha configurato l'icona")
+	}
+}

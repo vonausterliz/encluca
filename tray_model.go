@@ -12,11 +12,13 @@ import (
 // trayStatus è la parte di /api/status che serve all'icona.
 type trayStatus struct {
 	Version     string  `json:"version"`
+	Exe         string  `json:"exe"` // binario del servizio (su Windows diverso da os.Executable dopo un aggiornamento)
 	Lang        string  `json:"lang"`
 	Open        bool    `json:"open"`
 	StaleOpen   bool    `json:"staleOpen"`
 	Pending     int     `json:"pending"`
 	CloseOnLock *bool   `json:"closeOnLock"`
+	Tray        *bool   `json:"tray"` // nil = servizio che non conosce l'impostazione
 	Alerts      []alert `json:"alerts"`
 }
 
@@ -91,6 +93,25 @@ func (n *trayNotifier) diff(alerts []alert) (show, resolved []alert) {
 	}
 	n.seen = now
 	return show, resolved
+}
+
+// relaunchTarget: il servizio è stato aggiornato e il tray va rilanciato con il binario
+// nuovo. Al massimo una volta per versione (already = versione per cui ci si è già
+// rilanciati): se il binario rilanciato è ancora diverso non si va in ciclo.
+func relaunchTarget(st trayStatus, already string) (string, bool) {
+	if st.Version == "" || st.Version == Version || st.Version == already {
+		return "", false
+	}
+	return st.Exe, true
+}
+
+// trayShouldQuit: l'utente ha disattivato l'icona (anche quella avviata dall'autostart esce).
+func trayShouldQuit(st trayStatus) bool { return st.Tray != nil && !*st.Tray }
+
+// markupEscape: i demoni di notifica (xfce4-notifyd, GNOME) interpretano il testo come
+// markup; un nome di file con "&" farebbe sparire il messaggio.
+func markupEscape(s string) string {
+	return strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(s)
 }
 
 // lockAction: al blocco dello schermo si chiude se la cassaforte è aperta e l'opzione è attiva.
