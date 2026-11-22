@@ -28,6 +28,9 @@ Se la chiave venisse rubata, chi l'ha potrebbe firmare aggiornamenti falsi: in q
      --repo vonausterliz/encluca-releases --target main --title "vX.Y.Z" --notes "…"
    ```
    **Senza `SHA256SUMS` e `SHA256SUMS.sig` i client non si aggiornano.** Non è un problema, ma l'aggiornamento automatico non parte.
+   Crea la release **in bozza** (`--draft`) e pubblicala solo dopo il caricamento di tutti i file
+   (`gh release edit vX.Y.Z --repo vonausterliz/encluca-releases --draft=false`): così un client che
+   controlla in quel momento non vede una release senza file di firma.
 
    Solo per la **0.2.1** (versione di passaggio): pubblicala anche nel repository del codice
    (stesso comando con `--repo vonausterliz/encluca`), perché i client 0.2.0 cercano ancora lì.
