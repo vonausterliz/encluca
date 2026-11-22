@@ -122,31 +122,20 @@ func TestAutoCloseBlockedRetries(t *testing.T) {
 	if acStatus(t, c).Error == "" {
 		t.Fatal("motivo del blocco non mostrato")
 	}
+	c.mu.Lock()
+	next := c.autoCloseNext
+	c.mu.Unlock()
+	if !next.Equal(t0.Add(36 * time.Minute)) {
+		t.Fatalf("nuovo tentativo previsto a %v, voluto dopo 5 minuti", next.Sub(t0))
+	}
 	if err := os.Rename(filepath.Join(c.cfg.WorkDir, long), filepath.Join(c.cfg.WorkDir, "corto.epub")); err != nil {
 		t.Fatal(err)
 	}
-	// la rinomina è un'attività: la riportiamo indietro per provare solo il ritardo del nuovo tentativo
-	waitFor(t, "rinomina vista", func() bool {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		return len(c.problems) == 0
-	})
-	c.mu.Lock()
-	c.lastActivity = t0
-	c.mu.Unlock()
-	c.autoCloseTick(t0.Add(33 * time.Minute))
-	if !isOpen(c) {
-		t.Fatal("nuovo tentativo prima dei 5 minuti")
-	}
-	c.mu.Lock()
-	c.lastActivity = t0
-	c.mu.Unlock()
-	c.autoCloseTick(t0.Add(37 * time.Minute))
+	// la rinomina è un'attività: azzera il blocco e fa ripartire il conteggio
+	waitFor(t, "rinomina vista", func() bool { return acStatus(t, c).Error == "" })
+	c.autoCloseTick(acStatus(t, c).CloseAt.Add(time.Second))
 	if isOpen(c) {
 		t.Fatal("non chiusa dopo aver risolto il problema")
-	}
-	if e := acStatus(t, c).Error; e != "" {
-		t.Fatalf("errore non azzerato: %s", e)
 	}
 }
 
@@ -227,5 +216,61 @@ func TestAutoCloseAPI(t *testing.T) {
 	}
 	if code, out := apiCall(t, c, "/api/autoclose/postpone", map[string]any{}); code != 200 {
 		t.Fatalf("rimando: %d %v", code, out)
+	}
+}
+
+// Dopo un blocco, una modifica fa ripartire il conteggio e l'avviso dei 2 minuti deve tornare.
+func TestAutoCloseWarnAfterBlockedThenActivity(t *testing.T) {
+	_, c := openClient(t)
+	c.mu.Lock()
+	c.autoCloseErr = "bloccata"
+	c.autoCloseNext = time.Now().Add(time.Minute)
+	c.mu.Unlock()
+	writeWork(t, c, "nuovo.txt", "x")
+	waitFor(t, "blocco azzerato dalla modifica", func() bool { return acStatus(t, c).Error == "" })
+	c.mu.Lock()
+	c.lastActivity = time.Now().Add(-29 * time.Minute)
+	c.mu.Unlock()
+	if !acStatus(t, c).Warn {
+		t.Fatal("avviso dei 2 minuti soppresso da un blocco vecchio")
+	}
+}
+
+// Cambiare l'impostazione non deve chiudere subito una cassaforte ferma da tempo.
+func TestSetAutoCloseRestartsCountdown(t *testing.T) {
+	_, c := openClient(t)
+	c.SetAutoClose(0)
+	c.mu.Lock()
+	c.lastActivity = time.Now().Add(-2 * time.Hour)
+	c.mu.Unlock()
+	if err := c.SetAutoClose(30); err != nil {
+		t.Fatal(err)
+	}
+	c.autoCloseTick(time.Now().Add(time.Minute))
+	if !isOpen(c) {
+		t.Fatal("chiusa subito dopo aver cambiato l'impostazione, senza avviso")
+	}
+	if s := acStatus(t, c); !near(s.CloseAt, time.Now().Add(30*time.Minute)) {
+		t.Fatalf("conteggio non ripartito: %+v", s)
+	}
+}
+
+// Un file salvato mentre la chiusura invia al NAS non deve essere cancellato senza essere cifrato.
+func TestCloseAbortsOnLateChange(t *testing.T) {
+	_, c := openClient(t)
+	writeWork(t, c, "a.txt", "prima")
+	waitFor(t, "a.txt cifrato", func() bool { return pendingCount(c) == 0 })
+	closeBeforeRemove = func() { writeWork(t, c, "tardi.txt", "salvato all'ultimo") }
+	defer func() { closeBeforeRemove = nil }()
+	if err := c.Close(); err == nil {
+		t.Fatal("chiusura riuscita nonostante una modifica dell'ultimo momento")
+	}
+	if !isOpen(c) || readWork(c, "tardi.txt") != "salvato all'ultimo" {
+		t.Fatal("modifica dell'ultimo momento persa")
+	}
+	closeBeforeRemove = nil
+	waitFor(t, "tardi.txt cifrato", func() bool { return pendingCount(c) == 0 })
+	if err := c.Close(); err != nil {
+		t.Fatalf("seconda chiusura: %v", err)
 	}
 }

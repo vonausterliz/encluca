@@ -220,7 +220,7 @@ const EN = {
  'Si chiude da sola dopo {n} minuti senza modifiche.':'It closes by itself after {n} minutes without changes.',
  'La cassaforte si chiude da sola alle {h} perché non ci sono modifiche.':'The vault will close by itself at {h} because there are no changes.',
  'Chiusura automatica non riuscita: {e}':'Automatic close failed: {e}',
- 'file di blocco: se il programma è già chiuso, è rimasto da un\'interruzione; eliminalo dalla cartella':'lock file: if the program is already closed, it was left behind by an interruption; delete it from the folder',
+ 'file di blocco «{f}» (nascosto): se il programma è già chiuso, è rimasto da un\'interruzione. Elimina quello, non il documento':'lock file “{f}” (hidden): if the program is already closed, it was left behind by an interruption. Delete that one, not the document',
  'indica un numero di minuti tra 0 e 1440':'enter a number of minutes between 0 and 1440',
 };
 let S = null, forcePair = false;
@@ -379,7 +379,7 @@ function showInUse(list){
   const ul = $('inUseList'); ul.innerHTML = '';
   for(const f of list){
     const li = document.createElement('li'); li.textContent = f.path;
-    const how = f.lock ? t('file di blocco: se il programma è già chiuso, è rimasto da un\'interruzione; eliminalo dalla cartella') : f.proc;
+    const how = f.lock ? t('file di blocco «{f}» (nascosto): se il programma è già chiuso, è rimasto da un\'interruzione. Elimina quello, non il documento', {f:f.lockFile}) : f.proc;
     if(how){ const sm = document.createElement('small'); sm.textContent = ' — ' + how; li.append(sm); }
     ul.append(li);
   }

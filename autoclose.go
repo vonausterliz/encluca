@@ -25,6 +25,10 @@ func (closeBusyError) Error() string { return T("operazione in corso: riprova tr
 
 var errCloseBusy error = closeBusyError{}
 
+// closeBeforeRemove, se impostata (solo nei test), gira in Close() subito prima della
+// cancellazione della cartella in chiaro: simula un salvataggio dell'ultimo momento.
+var closeBeforeRemove func()
+
 type autoCloseStatus struct {
 	Minutes int       `json:"minutes"`
 	CloseAt time.Time `json:"closeAt"`
@@ -109,5 +113,8 @@ func (c *Client) SetAutoClose(min int) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cfg.AutoCloseMin = &min
+	if c.cip != nil {
+		c.noteActivityLocked(time.Now()) // il nuovo tempo parte da adesso: niente chiusura immediata
+	}
 	return saveJSON(c.cfgPath(), &c.cfg)
 }

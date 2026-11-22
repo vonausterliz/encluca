@@ -116,7 +116,7 @@ func (cc *cliConn) call(path string, body any, out any) error {
 		for _, f := range e.InUse {
 			switch {
 			case f.Lock:
-				e.Error += "\n  " + f.Path + " — " + T("file di blocco (se il programma è già chiuso, eliminalo)")
+				e.Error += "\n  " + f.Path + " — " + fmt.Sprintf(T("file di blocco %s (se il programma è già chiuso, elimina quello, non il documento)"), f.LockFile)
 			case f.Proc != "":
 				e.Error += "\n  " + f.Path + " — " + f.Proc
 			default:

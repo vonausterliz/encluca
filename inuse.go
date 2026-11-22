@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -18,6 +20,9 @@ type inUseFile struct {
 	Path string `json:"path"`           // relativo alla cartella aperta, separatore "/"
 	Proc string `json:"proc,omitempty"` // nome del programma, se il sistema lo dice
 	Lock bool   `json:"lock,omitempty"` // rilevato da un file di blocco del programma
+	// LockFile: il file di blocco (nascosto) da eliminare se il programma è già chiuso. È
+	// diverso dal documento: mostrare solo il documento porterebbe a cancellare quello.
+	LockFile string `json:"lockFile,omitempty"`
 }
 
 // inUseError blocca la chiusura finché i file non vengono chiusi.
@@ -30,9 +35,19 @@ func (e *inUseError) Error() string {
 			names = append(names, fmt.Sprintf(T("e altri %d"), len(e.Files)-3))
 			break
 		}
-		names = append(names, f.Path)
+		if f.Lock {
+			names = append(names, fmt.Sprintf(T("%s: file di blocco %s"), f.Path, f.LockFile))
+		} else {
+			names = append(names, f.Path)
+		}
 	}
-	return fmt.Sprintf(T("non chiudo: %d file sono aperti in un programma (%s). Chiudili e riprova"), len(e.Files), strings.Join(names, "; "))
+	msg := fmt.Sprintf(T("non chiudo: %d file sono aperti in un programma (%s). Chiudili e riprova"), len(e.Files), strings.Join(names, "; "))
+	for _, f := range e.Files {
+		if f.Lock {
+			return msg + ". " + T("Se il programma è già chiuso, il file di blocco è rimasto da un'interruzione: elimina il file di blocco (nascosto), non il documento")
+		}
+	}
+	return msg
 }
 
 // indicizzatori e simili: aprono i file per un attimo e non devono bloccare la chiusura
@@ -70,8 +85,10 @@ func lockFiles(work string) []inUseFile {
 		default:
 			return nil
 		}
-		if rel, err := filepath.Rel(work, filepath.Join(filepath.Dir(p), doc)); err == nil {
-			out = append(out, inUseFile{Path: filepath.ToSlash(rel), Lock: true})
+		rel, err := filepath.Rel(work, filepath.Join(filepath.Dir(p), doc))
+		lock, err2 := filepath.Rel(work, p)
+		if err == nil && err2 == nil {
+			out = append(out, inUseFile{Path: filepath.ToSlash(rel), Lock: true, LockFile: filepath.ToSlash(lock)})
 		}
 		return nil
 	})
@@ -109,4 +126,35 @@ func relInWork(work, abs string) (string, bool) {
 		return "", false
 	}
 	return filepath.ToSlash(rel), true
+}
+
+// parseLsof legge l'uscita di "lsof -F pcn" (righe p=PID, c=comando, n=percorso).
+func parseLsof(raw []byte, work string, self int) []inUseFile {
+	var out []inUseFile
+	pid, name := 0, ""
+	for _, l := range strings.Split(string(raw), "\n") {
+		if l == "" {
+			continue
+		}
+		switch l[0] {
+		case 'p':
+			pid, _ = strconv.Atoi(l[1:])
+			name = ""
+		case 'c':
+			name = l[1:]
+		case 'n':
+			if pid == self || ignoredProc(name) {
+				continue
+			}
+			rel, ok := relInWork(work, l[1:])
+			if !ok {
+				continue
+			}
+			if info, err := os.Stat(l[1:]); err != nil || !info.Mode().IsRegular() {
+				continue
+			}
+			out = append(out, inUseFile{Path: rel, Proc: name})
+		}
+	}
+	return out
 }

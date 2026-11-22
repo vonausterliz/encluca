@@ -53,11 +53,15 @@ func TestInUseLockFile(t *testing.T) {
 	os.MkdirAll(filepath.Join(work, "sub"), 0o700)
 	os.WriteFile(filepath.Join(work, "sub", ".~lock.b.ods#"), []byte("x"), 0o600)
 	got := lockFiles(work)
-	for _, want := range []string{"relazione.odt", "~$cumento.docx", "note.txt", "sub/b.ods"} {
+	for want, lock := range map[string]string{"relazione.odt": ".~lock.relazione.odt#", "~$cumento.docx": "~$cumento.docx", "note.txt": ".note.txt.swp", "sub/b.ods": "sub/.~lock.b.ods#"} {
 		f := hasInUse(got, want)
-		if f == nil || !f.Lock {
-			t.Errorf("manca %q (Lock) in %+v", want, got)
+		if f == nil || !f.Lock || f.LockFile != lock {
+			t.Errorf("manca %q con file di blocco %q in %+v", want, lock, got)
 		}
+	}
+	// il messaggio deve nominare il file di blocco, non solo il documento (che l'utente potrebbe cancellare)
+	if msg := (&inUseError{Files: got}).Error(); !strings.Contains(msg, ".~lock.relazione.odt#") {
+		t.Errorf("messaggio senza il nome del file di blocco: %s", msg)
 	}
 	if len(got) != 4 {
 		t.Errorf("voci in più: %+v", got)
@@ -192,5 +196,21 @@ func TestCloseAPIInUse409(t *testing.T) {
 	list, _ := out["inUse"].([]any)
 	if len(list) != 1 || list[0].(map[string]any)["path"] != "doc.odt" || out["error"] == "" {
 		t.Fatalf("risposta: %v", out)
+	}
+}
+
+func TestParseLsof(t *testing.T) {
+	work := t.TempDir()
+	a, b, c := filepath.Join(work, "a.pages"), filepath.Join(work, "b.txt"), filepath.Join(work, "c.txt")
+	for _, p := range []string{a, b, c} {
+		os.WriteFile(p, []byte("x"), 0o600)
+	}
+	raw := "p100\ncPages\nfcwd\nn" + work + "\nf12\nn" + a + "\n" +
+		"p200\ncmdworker_shared\nf3\nn" + b + "\n" +
+		"p300\ncencluca-self\nf4\nn" + c + "\n" +
+		"p400\ncvim\nf5\nn/altrove/x.txt\n"
+	got := parseLsof([]byte(raw), work, 300)
+	if len(got) != 1 || got[0].Path != "a.pages" || got[0].Proc != "Pages" {
+		t.Fatalf("parseLsof: %+v", got)
 	}
 }

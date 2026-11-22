@@ -1451,7 +1451,7 @@ func (c *Client) scanLoop(ctx context.Context) {
 		if c.cip != nil && c.st.Open && c.busy == "" {
 			changed, _ = c.scanLocked(false)
 			if changed {
-				c.lastActivity = time.Now()
+				c.noteActivityLocked(time.Now())
 				c.saveState()
 			}
 		}
@@ -1867,9 +1867,19 @@ func (c *Client) Close() error {
 		cancel()
 	}
 
+	if closeBeforeRemove != nil {
+		closeBeforeRemove()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	defer func() { c.busy = "" }()
+	// durante l'invio il lock era libero: un file salvato in quel momento sarebbe cancellato
+	// senza essere cifrato. Un'ultima scansione: se c'è qualcosa di nuovo la cassaforte resta aperta.
+	if changed, err := c.scanLocked(true); err != nil || changed || len(c.problems) > 0 {
+		c.saveState()
+		c.kick()
+		return errors.New(T("ci sono modifiche arrivate durante la chiusura: la cassaforte resta aperta, riprova tra poco"))
+	}
 	err := os.RemoveAll(c.cfg.WorkDir)
 	for _, st := range c.st.Files {
 		st.Plain = nil

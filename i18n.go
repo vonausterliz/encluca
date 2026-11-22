@@ -273,6 +273,9 @@ var enMessages = map[string]string{
 	"indica un numero di minuti tra 0 e 1440":                                                            "enter a number of minutes between 0 and 1440",
 	"controllo dei file aperti non riuscito: %v":                                                         "open files check failed: %v",
 	"e altri %d": "and %d more",
-	"non chiudo: %d file sono aperti in un programma (%s). Chiudili e riprova": "not closing: %d files are open in a program (%s). Close them and try again",
-	"file di blocco (se il programma è già chiuso, eliminalo)":                 "lock file (if the program is already closed, delete it)",
+	"non chiudo: %d file sono aperti in un programma (%s). Chiudili e riprova":           "not closing: %d files are open in a program (%s). Close them and try again",
+	"file di blocco %s (se il programma è già chiuso, elimina quello, non il documento)": "lock file %s (if the program is already closed, delete that one, not the document)",
+	"%s: file di blocco %s": "%s: lock file %s",
+	"Se il programma è già chiuso, il file di blocco è rimasto da un'interruzione: elimina il file di blocco (nascosto), non il documento": "If the program is already closed, the lock file was left behind by an interruption: delete the (hidden) lock file, not the document",
+	"ci sono modifiche arrivate durante la chiusura: la cassaforte resta aperta, riprova tra poco":                                         "changes arrived while closing: the vault stays open, try again shortly",
 }
