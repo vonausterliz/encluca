@@ -230,3 +230,18 @@ func TestSetAlertsValidates(t *testing.T) {
 		t.Fatalf("soglie dopo il riavvio: %v", cfg)
 	}
 }
+
+func TestAlertsAPI(t *testing.T) {
+	c := newBareClient(t)
+	if code, out := apiCall(t, c, "/api/alerts", map[string]any{"Offline": 6, "Backup": 48}); code != 200 {
+		t.Fatalf("impostazione: %d %v", code, out)
+	}
+	_, st := apiCall(t, c, "/api/status", nil)
+	cfg := st["alertCfg"].(map[string]any)
+	if cfg["offlineHours"] != 6.0 || cfg["backupHours"] != 48.0 {
+		t.Fatalf("soglie nello stato: %v", cfg)
+	}
+	if code, _ := apiCall(t, c, "/api/alerts", map[string]any{"Offline": -1, "Backup": 24}); code != 400 {
+		t.Fatalf("soglia negativa accettata: %d", code)
+	}
+}

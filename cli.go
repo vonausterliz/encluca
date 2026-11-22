@@ -288,6 +288,15 @@ func printStatus(st map[string]any) {
 	if e := str(st["lastError"]); e != "-" {
 		row(T("Ultimo errore"), e)
 	}
+	// avvisi che non hanno una riga propria qui sotto (NAS, backup, aggiornamenti)
+	if l, _ := st["alerts"].([]any); len(l) > 0 {
+		for _, a := range l {
+			m, _ := a.(map[string]any)
+			if id, _ := m["id"].(string); alertOwnLine(id) {
+				fmt.Println(T("AVVISO:"), m["text"])
+			}
+		}
+	}
 	if st["staleOpen"] == true {
 		fmt.Println(T("ATTENZIONE: la cassaforte era rimasta aperta: aprila con la password e poi chiudila"))
 	}
@@ -312,4 +321,9 @@ func printStatus(st map[string]any) {
 	if l, _ := st["renames"].([]any); len(l) > 0 {
 		fmt.Printf(T("%d nomi da rinominare: usa l'interfaccia web")+"\n", len(l))
 	}
+}
+
+// alertOwnLine: avvisi mostrati come riga a sé (gli altri hanno già una sezione propria).
+func alertOwnLine(id string) bool {
+	return id == "offline" || id == "backup" || id == "updateVerify" || strings.HasPrefix(id, "update-")
 }

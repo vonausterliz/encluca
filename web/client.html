@@ -151,6 +151,10 @@ dialog.inuse li small{color:var(--mute)}
         <label for="acMin">Chiudi la cassaforte dopo (minuti senza modifiche, 0 = mai)</label>
         <div class="row"><input id="acMin" type="number" min="0" max="1440" step="1" style="width:120px"><button id="acBtn" class="primary">Salva</button></div>
         <div style="color:var(--fg1);margin-top:6px;font-size:13px">Prima della chiusura salva i file aperti nei programmi: ciò che non è salvato va perso.</div>
+        <label for="alOff">Avvisa se il NAS non risponde da (ore, 0 = mai)</label>
+        <input id="alOff" type="number" min="0" max="720" step="1" style="width:120px">
+        <label for="alBak">Avvisa se il backup su Drive è fermo da (ore, 0 = mai)</label>
+        <div class="row"><input id="alBak" type="number" min="0" max="720" step="1" style="width:120px"><button id="alBtn" class="primary">Salva</button></div>
         <label for="workDir">Cartella in cui aprire la cassaforte</label>
         <div class="row"><input id="workDir" style="flex:1"><button id="workBtn" class="primary">Salva</button></div>
         <label>NAS collegato</label>
@@ -222,6 +226,10 @@ const EN = {
  'Chiusura automatica non riuscita: {e}':'Automatic close failed: {e}',
  'file di blocco «{f}» (nascosto): se il programma è già chiuso, è rimasto da un\'interruzione. Elimina quello, non il documento':'lock file “{f}” (hidden): if the program is already closed, it was left behind by an interruption. Delete that one, not the document',
  'indica un numero di minuti tra 0 e 1440':'enter a number of minutes between 0 and 1440',
+ // avvisi
+ 'Avvisa se il NAS non risponde da (ore, 0 = mai)':'Notify if the NAS has not responded for (hours, 0 = never)',
+ 'Avvisa se il backup su Drive è fermo da (ore, 0 = mai)':'Notify if the Drive backup has been stuck for (hours, 0 = never)',
+ 'indica un numero di ore tra 0 e 720':'enter a number of hours between 0 and 720',
 };
 let S = null, forcePair = false;
 const UI_TOKEN = document.querySelector('meta[name="encluca-token"]').content;
@@ -297,6 +305,9 @@ function render(){
   $('acWarn').classList.toggle('hidden', !(s.open && ac.warn));
   if(s.open && ac.warn) $('acWarnText').textContent = t('La cassaforte si chiude da sola alle {h} perché non ci sono modifiche.', {h:new Date(ac.closeAt).toLocaleTimeString(LOCALE(), {hour:'2-digit', minute:'2-digit'})});
   if(document.activeElement !== $('acMin') && ac.minutes !== undefined) $('acMin').value = ac.minutes;
+  const al = s.alertCfg || {};
+  if(document.activeElement !== $('alOff') && al.offlineHours !== undefined) $('alOff').value = al.offlineHours;
+  if(document.activeElement !== $('alBak') && al.backupHours !== undefined) $('alBak').value = al.backupHours;
   if(s.busy) $('doorMsg').textContent = s.busy === 'apertura' ? t('Decifratura in corso…') : t('Cifratura e chiusura in corso…');
 
   $('sNas').innerHTML = s.paired ? (s.online ? chip('ok',t('Raggiungibile')) : chip('ko',t('Non raggiungibile'))) : chip('wait',t('Non collegato'));
@@ -312,6 +323,8 @@ function render(){
   if(s.deferredConflicts) items.push(['', t('{n} conflitti da risolvere: apri la cassaforte', {n:s.deferredConflicts})]);
   for(const c of (s.conflicts||[])) items.push(['', t('Conflitto: la tua versione è salvata come “{f}”', {f:c})]);
   for(const p of (s.problems||[])) items.push(['warn-text', p]);
+  // avvisi senza un riquadro proprio nella pagina (il testo arriva già tradotto dal servizio)
+  for(const a of (s.alerts||[])) if(a.id==='offline' || a.id==='backup' || a.id==='updateVerify' || a.id.startsWith('update-')) items.push([a.level==='warn' ? 'warn-text' : '', a.text]);
   if(s.open && ac.error) items.push(['warn-text', t('Chiusura automatica non riuscita: {e}', {e:ac.error})]);
   $('alerts').innerHTML = '';
   if(!items.length && !(s.renames||[]).length && !s.massDelete && !s.massRecvDelete){ const li=document.createElement('li'); li.className='empty'; li.textContent=t('Nessun avviso.'); $('alerts').append(li); }
@@ -390,6 +403,11 @@ $('inUseRetry').onclick = () => { $('inUseDlg').close(); doClose(); };
 $('inUseFolder').onclick = () => api('/api/openfolder',{}).catch(e => $('doorMsg').textContent=e.message);
 $('inUseCancel').onclick = () => $('inUseDlg').close();
 $('acPostpone').onclick = () => api('/api/autoclose/postpone',{}).then(refresh).catch(e => $('doorMsg').textContent=e.message);
+$('alBtn').onclick = () => {
+  const ok = v => v !== '' && Number.isInteger(Number(v)) && Number(v) >= 0 && Number(v) <= 720;
+  if(!ok($('alOff').value) || !ok($('alBak').value)){ $('setMsg').textContent = t('indica un numero di ore tra 0 e 720'); return; }
+  api('/api/alerts',{Offline:Number($('alOff').value), Backup:Number($('alBak').value)}).then(()=>{ $('setMsg').textContent=t('Salvato.'); refresh(); }).catch(e=>$('setMsg').textContent=e.message);
+};
 $('acBtn').onclick = () => {
   const n = Number($('acMin').value);
   if($('acMin').value === '' || !Number.isInteger(n) || n < 0 || n > 1440){ $('setMsg').textContent = t('indica un numero di minuti tra 0 e 1440'); return; }

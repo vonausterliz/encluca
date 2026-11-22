@@ -289,7 +289,7 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	type body struct {
 		Password, Code, HubURL, Name, Dir, Path, Lang string
 		On                                            bool
-		Minutes                                       int
+		Minutes, Offline, Backup                      int
 	}
 	parse := func(r *http.Request) body {
 		var b body
@@ -313,6 +313,7 @@ func (c *Client) uiHandlerToken(uiAddr, uiToken string) http.Handler {
 	mux.HandleFunc("/api/autoupdate", post(func(r *http.Request) (any, error) { return nil, c.SetAutoUpdate(parse(r).On) }))
 	mux.HandleFunc("/api/sync", post(func(r *http.Request) (any, error) { return c.SyncNow() }))
 	mux.HandleFunc("/api/autoclose", post(func(r *http.Request) (any, error) { return nil, c.SetAutoClose(parse(r).Minutes) }))
+	mux.HandleFunc("/api/alerts", post(func(r *http.Request) (any, error) { b := parse(r); return nil, c.SetAlerts(b.Offline, b.Backup) }))
 	mux.HandleFunc("/api/autoclose/postpone", post(func(r *http.Request) (any, error) { c.PostponeAutoClose(); return nil, nil }))
 	// sblocco: fa aprire l'interfaccia nel browser dell'utente del servizio (vedi uiaccess.go)
 	mux.HandleFunc("/unlock", func(w http.ResponseWriter, r *http.Request) {

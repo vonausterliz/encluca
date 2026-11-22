@@ -293,4 +293,5 @@ var enMessages = map[string]string{
 	"Aggiornamento rifiutato: verifica della firma non riuscita":                            "Update rejected: signature verification failed",
 	"Aggiornamento installato: versione %s":                                                 "Update installed: version %s",
 	"indica un numero di ore tra 0 e 720":                                                   "enter a number of hours between 0 and 720",
+	"AVVISO:":                                                                               "NOTICE:",
 }
