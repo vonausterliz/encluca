@@ -928,6 +928,9 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/api/v1/changes", h.withDevice(h.apiChanges))
 	mux.HandleFunc("/api/v1/entry", h.withDevice(h.apiEntry))
 	mux.HandleFunc("/api/v1/file", h.withDevice(h.apiFile))
+	mux.HandleFunc("/api/v1/backup", h.withDevice(func(w http.ResponseWriter, r *http.Request, d *Device) {
+		writeJSON(w, http.StatusOK, h.gd.deviceStatus())
+	}))
 
 	mux.HandleFunc("/admin/api/login", h.adminLogin)
 	mux.HandleFunc("/admin/api/logout", h.adminLogout)

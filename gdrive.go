@@ -140,6 +140,14 @@ func (g *GDrive) status() map[string]any {
 	}
 }
 
+// deviceStatus è lo stato del backup per i dispositivi (avviso "backup fermo").
+func (g *GDrive) deviceStatus() backupInfo {
+	c := g.cfg()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return backupInfo{Enabled: c.RefreshToken != "", LastOK: g.lastOK, Error: g.lastErr}
+}
+
 func (g *GDrive) loop(ctx context.Context) {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()
