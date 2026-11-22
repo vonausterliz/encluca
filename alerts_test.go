@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 	"testing"
 	"time"
@@ -33,7 +34,8 @@ func TestHubBackupEndpoint(t *testing.T) {
 	if !bi.Enabled || !bi.LastOK.Equal(ok) {
 		t.Fatalf("stato del backup: %+v", bi)
 	}
-	resp, err := env.srv.Client().Get(env.srv.URL + "/api/v1/backup")
+	insecure := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	resp, err := insecure.Get(env.srv.URL + "/api/v1/backup")
 	if err != nil {
 		t.Fatal(err)
 	}
