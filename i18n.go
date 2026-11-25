@@ -292,6 +292,7 @@ var enMessages = map[string]string{
 	"La cassaforte si chiude da sola alle %s":                                                                    "The vault will close by itself at %s",
 	"Aggiornamento rifiutato: verifica della firma non riuscita":                                                 "Update rejected: signature verification failed",
 	"Il NAS usa encluca %s, questo computer la %s: aggiorna il NAS (TrueNAS → Apps → encluca → Stop, poi Start)": "The NAS runs encluca %s, this computer %s: update the NAS (TrueNAS → Apps → encluca → Stop, then Start)",
+	"Certificato del NAS: creata una nuova CA. Si usa il certificato autofirmato finché non la attivi; i computer la ricevono da soli, i browser devono importarla di nuovo": "NAS certificate: a new CA was created. The self-signed certificate is used until you activate it; computers receive it automatically, browsers must import it again",
 	"Aggiornamento installato: versione %s":             "Update installed: version %s",
 	"indica un numero di ore tra 0 e 720":               "enter a number of hours between 0 and 720",
 	"AVVISO:":                                           "NOTICE:",

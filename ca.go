@@ -122,6 +122,13 @@ func (h *Hub) loadOrCreateCA() error {
 		h.caCert, h.caKey, h.caFingerprint = cert, key, certFingerprint(cert.Raw)
 		return nil
 	}
+	return h.createCA()
+}
+
+// createCA genera una nuova CA, ne scrive certificato e chiave (sostituendo quelli esistenti) e
+// la rende quella in uso.
+func (h *Hub) createCA() error {
+	certFile, keyFile := filepath.Join(h.dir, "ca-cert.pem"), filepath.Join(h.dir, "ca-key.pem")
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return err
@@ -305,6 +312,31 @@ func (h *Hub) adminCAActivate(w http.ResponseWriter, r *http.Request) {
 		h.log.Print(T("Certificato del NAS: si torna a quello autofirmato"))
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// adminCARotate: POST. Crea una nuova CA (da usare se quella vecchia potrebbe essere stata
+// copiata) e torna al certificato autofirmato: i dispositivi ricevono la nuova impronta sulla
+// connessione verificata dal certificato autofirmato abbinato, poi l'amministratore riattiva come
+// la prima volta. Da quel momento i client non accettano più la vecchia CA.
+func (h *Hub) adminCARotate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErr(w, http.StatusMethodNotAllowed, T("metodo non ammesso"))
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := h.createCA(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.leaf = nil
+	h.cfg.CA.Active = false
+	if err := h.saveCfg(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	h.log.Print(T("Certificato del NAS: creata una nuova CA. Si usa il certificato autofirmato finché non la attivi; i computer la ricevono da soli, i browser devono importarla di nuovo"))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "fingerprint": h.caFingerprint})
 }
 
 // adminCAHosts: POST {Hosts: [...]} sostituisce gli indirizzi messi nel certificato del server.

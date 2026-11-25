@@ -956,6 +956,7 @@ func (h *Hub) handler() http.Handler {
 	mux.HandleFunc("/admin/api/trash/restore", h.withAdmin(h.adminTrashRestore))
 	mux.HandleFunc("/admin/api/ca/activate", h.withAdmin(h.adminCAActivate))
 	mux.HandleFunc("/admin/api/ca/hosts", h.withAdmin(h.adminCAHosts))
+	mux.HandleFunc("/admin/api/ca/rotate", h.withAdmin(h.adminCARotate))
 	mux.HandleFunc("/encluca-ca.crt", h.serveCACert)
 	mux.HandleFunc("/admin/api/versions/config", h.withAdmin(h.adminVersionsConfig))
 	mux.HandleFunc("/admin/api/versions/restore-at", h.withAdmin(h.adminVersionsRestoreAt))

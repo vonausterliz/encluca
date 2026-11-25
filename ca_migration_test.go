@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -241,5 +242,113 @@ func TestCADownload(t *testing.T) {
 	cert, err := x509.ParseCertificate(blk.Bytes)
 	if err != nil || fpOf(cert) != env.hub.caFingerprint {
 		t.Fatalf("certificato scaricato: %v", err)
+	}
+}
+
+func rotateCA(t *testing.T, env *testEnv) string {
+	t.Helper()
+	code, body := postJSON(t, adminClient(t, env), env.srv.URL+"/admin/api/ca/rotate", map[string]any{})
+	if code != 200 {
+		t.Fatalf("rotazione: %d %s", code, body)
+	}
+	var r struct {
+		OK          bool
+		Fingerprint string
+	}
+	json.Unmarshal(body, &r)
+	return r.Fingerprint
+}
+
+// Rotazione con la CA attiva: i computer continuano a sincronizzare, ricevono la nuova CA da soli,
+// la nuova si attiva senza forzare e la vecchia non vale più.
+func TestCARotation(t *testing.T) {
+	env, a, b := twoOpen(t)
+	syncsFile(t, env, a, "prima.txt", "prima")
+	waitFor(t, "CA ricevuta", func() bool {
+		return clientCA(a) == env.hub.caFingerprint && clientCA(b) == env.hub.caFingerprint
+	})
+	setCAActive(env, true)
+	newConn(a)
+	newConn(b)
+	syncsFile(t, env, a, "attiva.txt", "attiva")
+	old := env.hub.caFingerprint
+	oldCert, _ := os.ReadFile(filepath.Join(env.hub.dir, "ca-cert.pem"))
+	oldKey, _ := os.ReadFile(filepath.Join(env.hub.dir, "ca-key.pem"))
+
+	fp := rotateCA(t, env)
+	env.hub.mu.Lock()
+	active, cur := env.hub.cfg.CA.Active, env.hub.caFingerprint
+	env.hub.mu.Unlock()
+	if fp == "" || fp == old || fp != cur || active {
+		t.Fatalf("dopo la rotazione: fp=%q vecchia=%q attuale=%q attiva=%v", fp, old, cur, active)
+	}
+	newConn(a)
+	newConn(b)
+	syncsFile(t, env, a, "dopo.txt", "dopo la rotazione")
+	waitFor(t, "file su B", func() bool { return readWork(b, "dopo.txt") == "dopo la rotazione" })
+	syncsFile(t, env, b, "b.txt", "da B")
+	waitFor(t, "nuova CA sui computer e sull'hub", func() bool {
+		return clientCA(a) == fp && clientCA(b) == fp && deviceCAFP(env, "A") == fp && deviceCAFP(env, "B") == fp
+	})
+	if code, body := postJSON(t, adminClient(t, env), env.srv.URL+"/admin/api/ca/activate", map[string]bool{"Active": true}); code != 200 {
+		t.Fatalf("attivazione della nuova CA: %d %s", code, body)
+	}
+	newConn(a)
+	syncsFile(t, env, a, "nuova.txt", "con la nuova CA")
+
+	// un server con la vecchia CA (chiave rubata) non è più accettato
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "ca-cert.pem"), oldCert, 0o600)
+	os.WriteFile(filepath.Join(dir, "ca-key.pem"), oldKey, 0o600)
+	thief, err := newHub(dir, "")
+	if err != nil || thief.caFingerprint != old {
+		t.Fatalf("hub con la vecchia CA: %v", err)
+	}
+	thief.cfg.CA.Active = true
+	var hits atomic.Int32
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1) }))
+	startHubTLS(srv, thief)
+	defer srv.Close()
+	a.mu.Lock()
+	a.cfg.HubURL = srv.URL
+	a.mu.Unlock()
+	newConn(a)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	resp, err := a.req(ctx, http.MethodGet, "/api/v1/ping", nil, nil, -1)
+	cancel()
+	if err == nil {
+		resp.Body.Close()
+		t.Fatal("il client accetta ancora la vecchia CA")
+	}
+	if hits.Load() != 0 {
+		t.Fatalf("richieste arrivate al server con la vecchia CA: %d", hits.Load())
+	}
+}
+
+func TestCARotationPersists(t *testing.T) {
+	env := newTestEnv(t)
+	fp := rotateCA(t, env)
+	h2, err := newHub(env.hub.dir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if h2.caFingerprint != fp || h2.cfg.CA.Active {
+		t.Fatalf("dopo il riavvio: %q (voglio %q), attiva=%v", h2.caFingerprint, fp, h2.cfg.CA.Active)
+	}
+}
+
+func TestCARotateRequiresAdmin(t *testing.T) {
+	env := newTestEnv(t)
+	old := env.hub.caFingerprint
+	code, _ := postJSON(t, insecureClient(), env.srv.URL+"/admin/api/ca/rotate", map[string]any{})
+	if code != http.StatusUnauthorized && code != http.StatusForbidden {
+		t.Fatalf("senza accesso: %d", code)
+	}
+	code, _ = get(t, adminClient(t, env), env.srv.URL+"/admin/api/ca/rotate")
+	if code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET: %d", code)
+	}
+	if env.hub.caFingerprint != old {
+		t.Fatal("la CA è cambiata")
 	}
 }
