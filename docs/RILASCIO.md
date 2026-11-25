@@ -38,3 +38,4 @@ Se la chiave venisse rubata, chi l'ha potrebbe firmare aggiornamenti falsi: in q
    Dopo il passaggio verifica che l'immagine Docker resti scaricabile senza login:
    `docker logout ghcr.io; docker pull ghcr.io/vonausterliz/encluca:latest`.
 6. Immagine Docker per l'hub: la costruisce il workflow di GitHub al push del tag. L'hub su TrueNAS si aggiorna a mano: Apps → encluca → Stop, poi Start.
+7. Se il rilascio corregge una vulnerabilità, segui [SICUREZZA-AGGIORNAMENTI.md](SICUREZZA-AGGIORNAMENTI.md) (versione minima dei client, ordine NAS/computer, rotazione della CA).
