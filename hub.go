@@ -306,7 +306,10 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 		h.learnHost(r)
 		// scambio dell'impronta della CA (vedi ca.go): l'hub la comunica al dispositivo, che
 		// la salva; il dispositivo dichiara quella che ha, così l'hub sa chi è pronto
-		w.Header().Set("X-Encluca-CA", h.caFingerprint)
+		h.mu.Lock()
+		caFP := h.caFingerprint // può cambiare con la rotazione della CA
+		h.mu.Unlock()
+		w.Header().Set("X-Encluca-CA", caFP)
 		w.Header().Set("X-Encluca-Hub-Version", Version) // per l'avviso "NAS da aggiornare" sui computer
 		if fp := r.Header.Get("X-Encluca-CA"); validFingerprint(fp) {
 			h.mu.Lock()
@@ -825,6 +828,7 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 		h.pruneExpiredPairsLocked()
 		h.cfg.Devices = append(h.cfg.Devices, d)
 		err := h.saveCfg()
+		caFP := h.caFingerprint // la CA può cambiare (rotazione): si legge sotto il lucchetto
 		h.mu.Unlock()
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
@@ -835,7 +839,7 @@ func (h *Hub) adminDevices(w http.ResponseWriter, r *http.Request) {
 			u = "https://" + r.Host
 		}
 		// "f": certificato autofirmato; "c": CA. Il client accetta l'uno o l'altra (vedi ca.go)
-		code, _ := json.Marshal(map[string]string{"u": u, "k": key, "f": h.fingerprint, "c": h.caFingerprint})
+		code, _ := json.Marshal(map[string]string{"u": u, "k": key, "f": h.fingerprint, "c": caFP})
 		h.log.Printf(T("Nuovo dispositivo abbinabile: %q"), d.Name)
 		writeJSON(w, http.StatusOK, map[string]string{"code": "EL2-" + base64.RawURLEncoding.EncodeToString(code), "id": d.ID})
 	case http.MethodDelete:

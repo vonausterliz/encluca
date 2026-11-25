@@ -37,8 +37,13 @@ I passi di pubblicazione sono in [RILASCIO.md](RILASCIO.md).
 
 ## Rigenerare la CA del NAS
 
-Serve se pensi che qualcuno abbia copiato i file del NAS (`ca-key.pem` nel dataset).
+Il pulsante cambia la CA che **i browser** usano per fidarsi del NAS.
 La CA può firmare solo indirizzi privati e nomi di rete locale (name constraints), quindi anche rubata non vale per siti pubblici.
+
+**Attenzione: da solo non protegge i computer.**
+I computer si fidano anche del certificato autofirmato del NAS (`tls-key.pem`), che sta nella stessa cartella e che il pulsante non cambia.
+Chi ha copiato i file potrebbe ancora fingersi il NAS verso i computer della tua rete.
+Se pensi che qualcuno abbia copiato **l'intero dataset**, segui la procedura completa più sotto.
 
 1. Pagina del NAS → Certificato → 4. "Rigenera la CA".
    Il NAS torna subito al certificato autofirmato: i computer continuano a sincronizzare senza riabbinarli.
@@ -46,6 +51,22 @@ La CA può firmare solo indirizzi privati e nomi di rete locale (name constraint
 3. Nei browser e sui telefoni **rimuovi il vecchio "encluca-ca"** e importa quello nuovo (pulsante "Scarica encluca-ca.crt", stessi passi della prima volta). Controlla l'impronta.
 4. Passo 3: "Attiva il nuovo certificato".
    Da questo momento i computer non accettano più la vecchia CA.
+
+Un computer spento durante la rotazione risulta "non pronto": accendilo e aspetta che si colleghi prima di attivare.
+Se attivi lo stesso (conferma forzata), quel computer smette di sincronizzare finché non torni al certificato autofirmato.
+I codici di abbinamento creati prima della rotazione e non ancora usati non funzionano più dopo l'attivazione: generane uno nuovo.
+
+### Procedura completa: qualcuno ha copiato i file del NAS
+
+I file della cassaforte sono cifrati e la password non sta sul NAS, quindi il contenuto resta protetto.
+Sul NAS ci sono però le chiavi dei certificati, l'impronta della password admin e l'autorizzazione a Google Drive.
+
+1. TrueNAS → Apps → encluca → Stop.
+2. Nel dataset (cartella `data`) cancella `tls-cert.pem`, `tls-key.pem`, `ca-cert.pem` e `ca-key.pem`. Poi Start: l'hub ne crea di nuovi.
+3. I computer smettono di collegarsi: si fidavano del certificato vecchio, ed è proprio quello che si vuole. Su ognuno chiudi la cassaforte e abbinalo di nuovo con un codice nuovo dalla pagina del NAS. Poi elimina dalla pagina del NAS i dispositivi vecchi.
+4. Cambia la password admin del NAS.
+5. Revoca l'accesso di encluca a Google Drive (account Google → Sicurezza → App di terze parti) e autorizzalo di nuovo dalla pagina del NAS.
+6. Nei browser e sui telefoni rimuovi il vecchio "encluca-ca" e importa quello nuovo, poi attivalo (passi 3-4 sopra).
 
 ## Mail di GitHub "workflow fallito" (controllo del lunedì)
 
@@ -56,6 +77,8 @@ La CA può firmare solo indirizzi privati e nomi di rete locale (name constraint
   Se govulncheck dice che il codice vulnerabile non viene chiamato, si può aspettare la release successiva.
 - **gitleaks**: un segreto nel repository. Va revocato subito (token, password) e tolto dalla storia.
 - **Test**: un test diventato instabile. Va controllato, ma non è un problema di sicurezza.
+
+`govulncheck` è fissato a una versione nel workflow (`@v1.9.0`) e Dependabot non lo aggiorna. Il database delle vulnerabilità è sempre quello attuale, ma ogni tanto conviene alzare la versione a mano, soprattutto quando cambia la versione di Go.
 
 GitHub sospende i workflow programmati dopo 60 giorni senza attività nel repository e lo segnala per mail.
 Si riattivano da Actions → Test → "Enable workflow".

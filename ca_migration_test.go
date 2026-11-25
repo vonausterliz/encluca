@@ -352,3 +352,26 @@ func TestCARotateRequiresAdmin(t *testing.T) {
 		t.Fatal("la CA è cambiata")
 	}
 }
+
+// La rotazione mentre arrivano richieste dei dispositivi e download della CA (go test -race).
+func TestCARotationConcurrent(t *testing.T) {
+	env := newTestEnv(t)
+	tok := env.deviceToken("PC")
+	admin := adminClient(t, env)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 5; i++ {
+			postJSON(t, admin, env.srv.URL+"/admin/api/ca/rotate", map[string]any{})
+		}
+	}()
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+		env.apiCallV(t, http.MethodGet, "/api/v1/changes?since=0", tok, "2", Version, nil)
+		get(t, insecureClient(), env.srv.URL+"/encluca-ca.crt")
+	}
+}

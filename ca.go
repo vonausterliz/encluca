@@ -382,5 +382,8 @@ func (h *Hub) serveCACert(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/x-x509-ca-cert")
 	w.Header().Set("Content-Disposition", `attachment; filename="encluca-ca.crt"`)
 	w.Header().Set("Cache-Control", "no-store")
-	w.Write(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: h.caCert.Raw}))
+	h.mu.Lock()
+	raw := h.caCert.Raw // può cambiare con la rotazione della CA
+	h.mu.Unlock()
+	w.Write(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: raw}))
 }
