@@ -1,5 +1,6 @@
 # Test, controllo delle vulnerabilità note (govulncheck) e ricerca di segreti (gitleaks)
-# a ogni push e pull request.
+# a ogni push, pull request e ogni lunedì (nuove vulnerabilità note anche senza modifiche al codice:
+# se fallisce GitHub manda una mail, vedi docs/SICUREZZA-AGGIORNAMENTI.md).
 # Le Actions sono fissate a uno SHA (il commento indica la versione).
 name: Test
 
@@ -7,6 +8,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
