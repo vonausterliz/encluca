@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"crypto/tls"
 	"io"
 	"net/http"
@@ -25,7 +26,16 @@ func (env *testEnv) deviceToken(name string) string {
 // apiCall chiama l'API dei dispositivi con il protocollo indicato ("" = nessuna intestazione).
 func (env *testEnv) apiCall(t *testing.T, method, path, tok, proto string, body io.Reader) (int, string) {
 	t.Helper()
+	return env.apiCallV(t, method, path, tok, proto, "", body)
+}
+
+// apiCallV è apiCall con la versione dichiarata dal client ("" = nessuna intestazione).
+func (env *testEnv) apiCallV(t *testing.T, method, path, tok, proto, version string, body io.Reader) (int, string) {
+	t.Helper()
 	r, _ := http.NewRequest(method, env.srv.URL+path, body)
+	if version != "" {
+		r.Header.Set("X-Encluca-Version", version)
+	}
 	r.Header.Set("Authorization", "Bearer "+tok)
 	if proto != "" {
 		r.Header.Set("X-Encluca-Proto", proto)
@@ -203,5 +213,53 @@ func TestHubStoresOnlyValidVersion(t *testing.T) {
 	call("<script>alert(1)</script>" + strings.Repeat("A", 5000))
 	if ver() != "0.2.2" {
 		t.Fatalf("versione non valida registrata: %.40q", ver())
+	}
+}
+
+func setMinClient(t *testing.T, v string) {
+	old := minClientVersion
+	minClientVersion = v
+	t.Cleanup(func() { minClientVersion = old })
+}
+
+func TestHubRejectsBelowMinClientVersion(t *testing.T) {
+	setMinClient(t, "0.2.12")
+	env := newTestEnv(t)
+	tok := env.deviceToken("PC")
+	if code, body := env.apiCallV(t, http.MethodGet, "/api/v1/changes?since=0", tok, "2", "0.2.11", nil); code != http.StatusUpgradeRequired || !strings.Contains(body, "0.2.12") {
+		t.Fatalf("0.2.11: %d %s", code, body)
+	}
+	for _, v := range []string{"0.2.12", "0.3.0", ""} {
+		if code, body := env.apiCallV(t, http.MethodGet, "/api/v1/changes?since=0", tok, "2", v, nil); code != http.StatusOK {
+			t.Fatalf("versione %q: %d %s", v, code, body)
+		}
+	}
+}
+
+func TestDeviceOutdatedUsesMinVersion(t *testing.T) {
+	setMinClient(t, "0.2.12")
+	env := newTestEnv(t)
+	env.hub.mu.Lock()
+	env.hub.cfg.Devices = append(env.hub.cfg.Devices,
+		&Device{ID: "a", Name: "vecchio", TokenHash: "x", Version: "0.2.11"},
+		&Device{ID: "b", Name: "nuovo", TokenHash: "y", Version: "0.2.12"})
+	env.hub.mu.Unlock()
+	rec := httptest.NewRecorder()
+	env.hub.adminStatus(rec, httptest.NewRequest(http.MethodGet, "/admin/api/status", nil))
+	var s struct {
+		Devices []struct {
+			Name     string
+			Outdated bool
+		}
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &s); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, d := range s.Devices {
+		got[d.Name] = d.Outdated
+	}
+	if !got["vecchio"] || got["nuovo"] {
+		t.Fatalf("outdated: %v", got)
 	}
 }

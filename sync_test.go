@@ -28,6 +28,9 @@ type testEnv struct {
 	notFound string
 	// status: se diverso da 0, l'hub risponde sempre con questo codice (es. 426 = client troppo vecchio)
 	status atomic.Int32
+	// hubVer: se impostata, sostituisce l'intestazione X-Encluca-Hub-Version ("-" = la toglie,
+	// come un hub precedente alla 0.2.12)
+	hubVer atomic.Pointer[string]
 	ctx    context.Context
 	cancel context.CancelFunc
 }
@@ -57,6 +60,9 @@ func newTestEnv(t *testing.T) *testEnv {
 		if env.notFound != "" && r.URL.Path == env.notFound {
 			http.NotFound(w, r)
 			return
+		}
+		if v := env.hubVer.Load(); v != nil {
+			w = &hdrOverride{ResponseWriter: w, key: "X-Encluca-Hub-Version", val: *v}
 		}
 		inner.ServeHTTP(w, r)
 	}))
@@ -371,4 +377,35 @@ func startHubTLS(srv *httptest.Server, h *Hub) {
 	srv.Listener = tls.NewListener(srv.Listener, h.tlsConfig())
 	srv.Start()
 	srv.URL = "https://" + srv.Listener.Addr().String()
+}
+
+// hdrOverride cambia un'intestazione della risposta subito prima che parta.
+type hdrOverride struct {
+	http.ResponseWriter
+	key, val string
+	done     bool
+}
+
+func (o *hdrOverride) apply() {
+	if o.done {
+		return
+	}
+	o.done = true
+	if o.val == "-" {
+		o.Header().Del(o.key)
+	} else {
+		o.Header().Set(o.key, o.val)
+	}
+}
+
+func (o *hdrOverride) WriteHeader(code int) { o.apply(); o.ResponseWriter.WriteHeader(code) }
+func (o *hdrOverride) Write(b []byte) (int, error) {
+	o.apply()
+	return o.ResponseWriter.Write(b)
+}
+func (o *hdrOverride) Flush() {
+	o.apply()
+	if f, ok := o.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
 }

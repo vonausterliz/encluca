@@ -71,6 +71,14 @@ type Device struct {
 // le voci cartella: l'hub rifiuta con 426 i client che non la dichiarano (X-Encluca-Proto).
 const protoVersion = 2
 
+// minClientVersion è la versione minima accettata dei client: alzala quando una correzione di
+// sicurezza riguarda il client (vedi docs/SICUREZZA-AGGIORNAMENTI.md). Var, non const, per i test.
+var minClientVersion = "0.2.2"
+
+func tooOldMsg() string {
+	return fmt.Sprintf(T("questo dispositivo usa una versione di encluca troppo vecchia per questo NAS: aggiornalo alla %s o successiva"), minClientVersion)
+}
+
 // pairValidity è la durata di un codice di abbinamento non ancora usato.
 const pairValidity = 24 * time.Hour
 
@@ -292,13 +300,14 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 			return
 		}
 		if p, err := strconv.Atoi(r.Header.Get("X-Encluca-Proto")); err != nil || p < protoVersion {
-			writeErr(w, http.StatusUpgradeRequired, T("questo dispositivo usa una versione di encluca troppo vecchia per questo NAS: aggiornalo alla 0.2.2 o successiva"))
+			writeErr(w, http.StatusUpgradeRequired, tooOldMsg())
 			return
 		}
 		h.learnHost(r)
 		// scambio dell'impronta della CA (vedi ca.go): l'hub la comunica al dispositivo, che
 		// la salva; il dispositivo dichiara quella che ha, così l'hub sa chi è pronto
 		w.Header().Set("X-Encluca-CA", h.caFingerprint)
+		w.Header().Set("X-Encluca-Hub-Version", Version) // per l'avviso "NAS da aggiornare" sui computer
 		if fp := r.Header.Get("X-Encluca-CA"); validFingerprint(fp) {
 			h.mu.Lock()
 			if d.CAFP != fp {
@@ -315,6 +324,11 @@ func (h *Hub) withDevice(fn func(http.ResponseWriter, *http.Request, *Device)) h
 				h.saveCfg()
 			}
 			h.mu.Unlock()
+			// dopo il salvataggio: la pagina dei dispositivi mostra chi è da aggiornare
+			if newerVersion(minClientVersion, v) {
+				writeErr(w, http.StatusUpgradeRequired, tooOldMsg())
+				return
+			}
 		}
 		fn(w, r, d)
 	}
@@ -770,7 +784,7 @@ func (h *Hub) adminStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	devs := make([]map[string]any, 0, len(h.cfg.Devices))
 	for _, d := range h.cfg.Devices {
-		outdated := d.TokenHash != "" && (d.Version == "" || newerVersion("0.2.2", d.Version))
+		outdated := d.TokenHash != "" && (d.Version == "" || newerVersion(minClientVersion, d.Version))
 		devs = append(devs, map[string]any{"id": d.ID, "name": d.Name, "created": d.Created, "lastSeen": d.LastSeen, "pending": d.TokenHash == "", "version": d.Version, "outdated": outdated, "caReady": d.TokenHash != "" && d.CAFP == h.caFingerprint})
 	}
 	seq := h.idx.Seq

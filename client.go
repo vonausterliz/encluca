@@ -158,6 +158,7 @@ type Client struct {
 	// avvisi (alerts.go)
 	offlineSince time.Time   // primo tentativo fallito dell'interruzione in corso (zero se raggiungibile)
 	incompat     string      // il NAS risponde ma le versioni non sono compatibili (motivo)
+	hubVersion   string      // versione di encluca dichiarata dal NAS ("" = sconosciuta: hub < 0.2.12)
 	backup       *backupInfo // stato del backup Drive dal NAS (nil = sconosciuto o hub senza l'API)
 	updatedTo    string      // versione installata dall'ultimo aggiornamento automatico
 	updatedAt    time.Time
@@ -347,6 +348,19 @@ func (c *Client) req(ctx context.Context, method, p string, q url.Values, body i
 			c.cfg.CAFingerprint = ca
 			c.setPins(c.cfg.Fingerprint, ca)
 			saveJSON(c.cfgPath(), &c.cfg)
+		}
+		c.mu.Unlock()
+	}
+	// versione del NAS, per l'avviso "NAS da aggiornare" (solo numeri ben formati). Le risposte
+	// senza intestazione (ping, hub < 0.2.12) lasciano il valore noto: l'avviso non va e viene.
+	if hv, ok := resp.Header["X-Encluca-Hub-Version"]; ok {
+		v := ""
+		if len(hv) == 1 && validVersion(hv[0]) {
+			v = hv[0]
+		}
+		c.mu.Lock()
+		if c.cfg.HubURL == base {
+			c.hubVersion = v
 		}
 		c.mu.Unlock()
 	}
@@ -1601,6 +1615,7 @@ func (c *Client) Pair(code, hubURL, name string) error {
 	oldMeta, _ := os.ReadFile(c.metaCache())
 	c.cfg.HubURL, c.cfg.Token, c.cfg.Fingerprint = strings.TrimRight(u, "/"), pc.Token, pc.Fingerprint
 	c.cfg.CAFingerprint = pc.CA
+	c.hubVersion = "" // si saprà dal nuovo NAS
 	if strings.TrimSpace(name) != "" {
 		c.cfg.DeviceName = strings.TrimSpace(name)
 	}

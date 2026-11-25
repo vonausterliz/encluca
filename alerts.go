@@ -70,6 +70,10 @@ func (c *Client) alertsLocked(now time.Time) []alert {
 	if c.incompat != "" {
 		add("incompatible", "warn", c.incompat, time.Time{})
 	}
+	// l'ID contiene la versione del computer: a ogni nuovo rilascio l'icona avvisa di nuovo una volta
+	if c.hubVersion != "" && newerVersion(Version, c.hubVersion) {
+		add("hubOutdated-"+Version, "info", fmt.Sprintf(T("Il NAS usa encluca %s, questo computer la %s: aggiorna il NAS (TrueNAS → Apps → encluca → Stop, poi Start)"), c.hubVersion, Version), time.Time{})
+	}
 	if h := hoursOr(c.cfg.AlertOfflineHours, alertOfflineDefault); h > 0 && c.cfg.Token != "" && !c.revoked && !c.online && !c.offlineSince.IsZero() &&
 		now.Sub(c.offlineSince) >= time.Duration(h)*time.Hour {
 		add("offline", "warn", fmt.Sprintf(T("Il NAS non risponde da %s"), humanDur(now.Sub(c.offlineSince))), c.offlineSince)

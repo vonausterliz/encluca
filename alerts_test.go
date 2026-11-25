@@ -323,3 +323,44 @@ func TestBackupErrorSanitized(t *testing.T) {
 		t.Fatalf("errore non troncato: %d", len(long))
 	}
 }
+
+func setHubVer(env *testEnv, v string) { env.hubVer.Store(&v) }
+
+func hubOutdatedAlert(c *Client) (alert, bool) {
+	for id, a := range alertIDs(c) {
+		if strings.HasPrefix(id, "hubOutdated") {
+			return a, true
+		}
+	}
+	return alert{}, false
+}
+
+// Il NAS ha una versione più vecchia del computer: avviso con l'istruzione per aggiornarlo.
+func TestAlertHubOutdated(t *testing.T) {
+	env := newTestEnv(t)
+	c := env.newClient("PC1")
+	setHubVer(env, "0.2.1")
+	c.SyncNow()
+	waitFor(t, "avviso NAS da aggiornare", func() bool { _, ok := alertIDs(c)["hubOutdated-"+Version]; return ok })
+	a := alertIDs(c)["hubOutdated-"+Version]
+	if !strings.Contains(a.Text, "0.2.1") || !strings.Contains(a.Text, "Stop") || a.Level != "info" {
+		t.Fatalf("avviso: %+v", a)
+	}
+	setHubVer(env, Version)
+	c.SyncNow()
+	waitFor(t, "avviso risolto", func() bool { _, ok := hubOutdatedAlert(c); return !ok })
+}
+
+// Hub precedente alla 0.2.12 (nessuna intestazione) o intestazione non valida: nessun avviso.
+func TestAlertHubOutdatedIgnoresOldOrBadHeader(t *testing.T) {
+	env := newTestEnv(t)
+	c := env.newClient("PC1")
+	for _, v := range []string{"-", "abc", "0.2.1<script>", ""} {
+		setHubVer(env, v)
+		c.SyncNow()
+		time.Sleep(300 * time.Millisecond)
+		if a, ok := hubOutdatedAlert(c); ok {
+			t.Fatalf("intestazione %q: avviso inatteso %+v", v, a)
+		}
+	}
+}
